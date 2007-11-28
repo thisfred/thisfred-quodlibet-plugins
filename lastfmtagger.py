@@ -6,13 +6,14 @@
 # Licensed under GPLv2. See Quod Libet's COPYING for more information.
 
 import random
-import md5, urllib, urllib2, time, threading, os
+import md5, urllib, time, threading, os
 import player, config, const, widgets, parse
 import gobject, gtk, xmlrpclib, socket
 from sets import Set
 from xml.dom import minidom
 from random import randint
 from qltk.entry import ValidatingEntry
+
 
 def to(string): print string.encode("ascii", "replace")
 
@@ -31,7 +32,7 @@ class LastFMTagger(EventPlugin):
     PLUGIN_NAME = _("Last.fm Tagger")
     PLUGIN_DESC = "Synchronize tags between local files and last.fm"
     PLUGIN_ICON = gtk.STOCK_CONNECT
-    PLUGIN_VERSION = "0.1"
+    PLUGIN_VERSION = "0.2"
     CLIENT = "tst"
     PROTOCOL_VERSION = "1.1"
     TRACK_TAG_URL = "http://ws.audioscrobbler.com/1.0/user/%s/tracktags.xml?artist=%s&track=%s"
@@ -43,6 +44,7 @@ class LastFMTagger(EventPlugin):
     username = ""
     password = ""
     
+    tag = '~tag'
     
     # state management
     need_config = True
@@ -77,6 +79,9 @@ class LastFMTagger(EventPlugin):
         hasher = md5.new()
         hasher.update(password);
         self.password = hasher.hexdigest()
+        try:
+            self.tag = config.get("plugins", "lastfmtagger_files") == "true" and "tag" or "~tag"
+        except: pass
         self.need_config = False
 
     def __destroy_cb(self, dialog, response_id):
@@ -124,7 +129,7 @@ class LastFMTagger(EventPlugin):
         if not cached_tags is None:
             return cached_tags
         try:
-            stream = urllib2.urlopen(url)
+            stream = urllib.urlopen(url)
         except:
             self.lastfm_cache[url] = tags
             return tags
@@ -237,7 +242,7 @@ class LastFMTagger(EventPlugin):
     def save_tags(self, song, tags):
         log("saving tags: %s" % ', '.join(tags))
         try:
-            song["tag"] = '\n'.join(tags)
+            song[self.tag] = '\n'.join(tags)
             log("saved tags")
         except:
             pass
@@ -269,13 +274,13 @@ class LastFMTagger(EventPlugin):
         can't actually remove tags. Yet.
         """
         log("syncing tags")
-        title = urllib2.quote(song.comma("title").encode("utf-8"))
+        title = urllib.quote(song.comma("title").encode("utf-8"))
         if "version" in song:
             title += " (%s)" % song.comma("version").encode("utf-8")
-        artist = urllib2.quote(song.comma("artist").encode("utf-8"))
-        album =  urllib2.quote(song.comma("album").encode("utf-8"))
+        artist = urllib.quote(song.comma("artist").encode("utf-8"))
+        album =  urllib.quote(song.comma("album").encode("utf-8"))
         ql_tags = Set()
-        ql_tag_comma = song.comma("tag")
+        ql_tag_comma = song.comma(self.tag)
         if ql_tag_comma:
             ql_tags = Set(ql_tag_comma.split(", "))
         lastfm_tags = self.get_lastfm_tags(title, artist, album)
@@ -293,7 +298,15 @@ class LastFMTagger(EventPlugin):
         return random_string, md5.md5(self.password + random_string).hexdigest()
         
     def PluginPreferences(self, parent):
-        
+
+        def toggled(widget):
+            if widget.get_active():
+                config.set("plugins", "lastfmtagger_files", "true")
+                self.tag = "tag"
+            else:
+                config.set("plugins", "lastfmtagger_files", "false")
+                self.tag = "~tag"
+                
         def changed(entry, key):
             # having a function for each entry is unnecessary..
             config.set("plugins", "lastfmtagger_" + key, entry.get_text())
@@ -317,7 +330,8 @@ class LastFMTagger(EventPlugin):
         lt = gtk.Label(_("Please enter your Audioscrobbler\nusername and password."))
         lu = gtk.Label(_("Username:"))
         lp = gtk.Label(_("Password:"))
-        ve = ValidatingEntry(parse.Query.is_valid_color)
+        files = gtk.CheckButton(_("Write tags to files. (When disabled the\ntags are written to the database only.)"))
+
         for l in [lt, lu, lp]:
             l.set_line_wrap(True)
             l.set_alignment(0.0, 0.5)
@@ -331,16 +345,21 @@ class LastFMTagger(EventPlugin):
         pwent.set_invisible_char('*')
         table.set_border_width(6)
         
-        table.attach(ve, 1, 2, 3, 4, xoptions=gtk.FILL | gtk.SHRINK)
+
 
         try: userent.set_text(config.get("plugins", "lastfmtagger_username"))
         except: pass
         try: pwent.set_text(config.get("plugins", "lastfmtagger_password"))
         except: pass
-
+        try:
+            if config.get("plugins", "lastfmtagger_files") == "true":
+                files.set_active(True)
+        except: pass
         table.attach(userent, 1, 2, 1, 2, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(pwent, 1, 2, 2, 3, xoptions=gtk.FILL | gtk.SHRINK)
+        table.attach(files, 0, 2, 5, 7, xoptions=gtk.FILL | gtk.SHRINK)
         pwent.connect('changed', changed, 'password')
         userent.connect('changed', changed, 'username')
         table.connect('destroy', destroyed)
+        files.connect('toggled', toggled)
         return table
