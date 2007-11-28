@@ -32,7 +32,7 @@ class LastFMTagger(EventPlugin):
     PLUGIN_NAME = _("Last.fm Tagger")
     PLUGIN_DESC = "Synchronize tags between local files and last.fm"
     PLUGIN_ICON = gtk.STOCK_CONNECT
-    PLUGIN_VERSION = "0.2"
+    PLUGIN_VERSION = "0.3"
     CLIENT = "tst"
     PROTOCOL_VERSION = "1.1"
     TRACK_TAG_URL = "http://ws.audioscrobbler.com/1.0/user/%s/tracktags.xml?artist=%s&track=%s"
@@ -59,7 +59,9 @@ class LastFMTagger(EventPlugin):
     
     def plugin_on_song_started(self, song):
         if song is None: return
-        self.sync_tags(song)
+        bg = threading.Thread(None, self.sync_tags, args=(song,))
+        bg.setDaemon(True)
+        bg.start()
     
     def read_config(self):
         username = ""
@@ -160,7 +162,7 @@ class LastFMTagger(EventPlugin):
         title = song.comma("title")
         if "version" in song:
             title += " (%s)" % song.comma("version").encode("utf-8")
-        xmlrpc_args = (
+        self._submit_track_tags(
             self.username,
             random_string,
             md5hash,
@@ -168,9 +170,6 @@ class LastFMTagger(EventPlugin):
             title,
             list(track_tags),
             'set')
-        bg = threading.Thread(None, self._submit_track_tags, args=xmlrpc_args)
-        bg.setDaemon(True)
-        bg.start()
         return track_tags
 
     def _submit_track_tags(self, *args):
@@ -188,16 +187,13 @@ class LastFMTagger(EventPlugin):
         if artist_tags.issubset(lastfm_tags):
             return artist_tags
         random_string, md5hash = self.get_hash()
-        xmlrpc_args = (
+        self._submit_artist_tags(
             self.username,
             random_string,
             md5hash,
             song["artist"],
             [':'.join(tag.split(':')[1:]) for tag in artist_tags],
             'set')
-        bg = threading.Thread(None, self._submit_artist_tags, args=xmlrpc_args)
-        bg.setDaemon(True)
-        bg.start()
         return artist_tags
 
     def _submit_artist_tags(self, *args):
@@ -217,7 +213,7 @@ class LastFMTagger(EventPlugin):
         random_string, md5hash = self.get_hash()
         server = xmlrpclib.ServerProxy(
             "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
-        xmlrpc_args = (
+        self._submit_album_tags(
             self.username,
             random_string,
             md5hash,
@@ -225,9 +221,6 @@ class LastFMTagger(EventPlugin):
             song["album"],
             [':'.join(tag.split(':')[1:]) for tag in album_tags],
             'set')
-        bg = threading.Thread(None, self._submit_album_tags, args=xmlrpc_args)
-        bg.setDaemon(True)
-        bg.start()
         return album_tags
     
     def _submit_album_tags(self, *args):
@@ -288,9 +281,8 @@ class LastFMTagger(EventPlugin):
         if all_tags > lastfm_tags:
             self.submit_tags(song, artist, album, title, all_tags, lastfm_tags)
         if all_tags > ql_tags:
-            bg = threading.Thread(None, self.save_tags, args=(song, all_tags,))
-            bg.setDaemon(True)
-            bg.start()
+            self.save_tags(song, all_tags)
+
 
         
     def get_hash(self):
