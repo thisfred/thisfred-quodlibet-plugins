@@ -71,7 +71,7 @@ class AutoQueue(EventPlugin):
                 self.create_db()
             self.connection = sqlite.connect(self.DB)
             self.cursor = self.connection.cursor()
-                
+        self.queued = 0
         # Set up exit hook to dump queue
         gtk.quit_add(0, self.dump_stuff)
 
@@ -143,9 +143,13 @@ class AutoQueue(EventPlugin):
             song.comma("artist").lower() for song in main.playlist.q.get()]
 
     def add_to_queue(self):
-        if self.random_skip:
-            trigger = random.random()
-            if trigger > self.song["~#rating"]: return
+        if self.random_skip and self.queued:
+            trigger = random.random() * ((-1.0/self.queued) + 1.0)
+            rating = self.song["~#rating"]
+            log("trigger: %s rating: %s" % (trigger, rating))
+            if trigger > rating:
+                self.queued = 0
+                return
         queue_length = len(main.playlist.q)
         self.unblock_artists()
         to_add = self.to_add
@@ -214,7 +218,10 @@ class AutoQueue(EventPlugin):
                     "#(laststarted > %s days)" % self.track_block_time)
                 self.queue(search, to_add, by="tag")
                 if len(main.playlist.q) > queue_length:
+                    to_add -= len(main.playlist.q) - queue_length
                     log("Tracks added by tag.")
+        if to_add:
+            self.queued = 0
         if self.reorder:
             self.reorder_queue(self.song, main.playlist.q.get())
 
@@ -231,9 +238,8 @@ class AutoQueue(EventPlugin):
         tw, weighted_songs = self.get_weights([song], songs, by=by)
         if tw == 0: return
         main.playlist.unqueue(songs)
-        weighted_songs.sort()
-        weighted_songs.reverse()
-        main.playlist.enqueue([w_song for (weight, w_song) in weighted_songs])
+        weighted_songs.sort(reverse=True)
+        main.playlist.enqueue([w_song[2] for w_song in weighted_songs])
             
     def queue(self, search, to_add, by="track"):
         try:
@@ -264,9 +270,11 @@ class AutoQueue(EventPlugin):
                 n -= 1
                 adds.append(song)
                 self.added += 1
+                self.queued += 1
         main.playlist.enqueue(adds)
         
-    def enqueue_weighted_sample(self, songs, n, by="track", queue_similarity=True):
+    def enqueue_weighted_sample(
+        self, songs, n, by="track", queue_similarity=True):
         by_songs = [self.song]
         if queue_similarity:
             by_songs.extend(main.playlist.q.get())
@@ -277,10 +285,10 @@ class AutoQueue(EventPlugin):
             r = random.randint(0, total_weight)
             running = 0
             index = 0
-            for weight, song in weighted_songs:
+            for weight, i, song in weighted_songs:
                 running += weight
                 if running >= r: break
-            weighted_songs.remove((weight, song))
+            weighted_songs.remove((weight, i, song))
             total_weight -= weight
             artist = song.comma("artist").lower()
             if self.is_blocked(artist) or artist in [
@@ -289,6 +297,7 @@ class AutoQueue(EventPlugin):
             n -= 1
             adds.append(song)
             self.added += 1
+            self.queued += 1
         main.playlist.enqueue(adds)
         
     def enqueue_best_sample(self, songs, n, by="track", queue_similarity=True):
@@ -299,7 +308,7 @@ class AutoQueue(EventPlugin):
         weighted_songs.sort()
         adds = []
         while n and weighted_songs:
-            song = weighted_songs.pop()[1]
+            song = weighted_songs.pop()[2]
             artist = song.comma("artist").lower()
             if self.is_blocked(artist) or artist in [
                 add.comma("artist").lower() for add in adds]:
@@ -307,17 +316,18 @@ class AutoQueue(EventPlugin):
             n -= 1
             adds.append(song)
             self.added += 1
+            self.queued += 1
         main.playlist.enqueue(adds)
     
     def get_weights(
         self, by_songs, for_songs, by="track"):
         weighted_songs = []
         total_weight = 0
-        for song in for_songs:
+        for i, song in enumerate(for_songs):
             weight = self.get_match(by_songs, song, by=by)
             if self.include_rating:
                 weight = int(weight * song["~#rating"])
-            weighted_songs.append((weight, song))
+            weighted_songs.append((weight, i, song))
             total_weight += weight
         return total_weight, weighted_songs
         
