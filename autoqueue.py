@@ -7,23 +7,50 @@
 # published by the Free Software Foundation
 
 from datetime import datetime, timedelta
+from time import strptime
 import urllib, threading
 import random, os
 from xml.dom import minidom
 from cPickle import Pickler, Unpickler
-import sqlite
-
+try:
+    import sqlite
+    SQL = True
+except:
+    SQL = False
+    
 import const, gtk
 from plugins.events import EventPlugin
 from widgets import main
 from parse import Query
 from qltk.songlist import SongList
+from qltk import Frame
+import config
 
 TRACK_URL = "http://ws.audioscrobbler.com/1.0/track/%s/%s/similar.xml"
 ARTIST_URL = "http://ws.audioscrobbler.com/1.0/artist/%s/similar.xml"
 
 # Set this to True to enable logging
 verbose = True
+
+INT_SETTINGS = {
+    "artist_block_time": 2,
+    "track_block_time": 14,
+    "desired_queue_length": -1,
+    "to_add": 2,
+    "cache_time": 90,}
+
+BOOL_SETTINGS = {
+    "cache": SQL and True,
+    "include_rating": True,
+    "by_tracks": True,
+    "by_artists": True,
+    "by_tags": True,
+    "queue_similarity": True,
+    "reorder": True,
+    "random_skip": True,}
+
+STR_SETTINGS = {
+    "pick": "best",}
 
 def log(msg):
     if not verbose: return
@@ -42,24 +69,13 @@ class AutoQueue(EventPlugin):
     except AttributeError:
         DB = os.path.join(const.DIR, "similarity.db")
         
+
     _blocked_artists = []
     _blocked_artists_times = []
-    artist_block_time = timedelta(2)
-    track_block_time = 14
-    desired_queue_length = 0
-    to_add = 3
-    cache = True
-    cache_time = timedelta(90) 
-    pick = "best"
-    include_rating = False
-    by_tracks = True
-    by_artists = True
-    by_tags = True
-    queue_similarity = True
-    reorder = True
-    random_skip = True
+    __enabled = False
     
     def __init__(self):
+        self.read_config()
         try:
             unpickler = Unpickler(open(self.DUMP, 'r'))
             self._blocked_artists, self._blocked_artists_times = unpickler.load()
@@ -75,6 +91,28 @@ class AutoQueue(EventPlugin):
         # Set up exit hook to dump queue
         gtk.quit_add(0, self.dump_stuff)
 
+    def read_config(self):
+        for key, value in INT_SETTINGS.items():
+            try:
+                setattr(self, key, config.getint(
+                    "plugins", "autoqueue_%s" % key))
+            except:
+                setattr(self, key, value)
+                config.set("plugins", "autoqueue_%s" % key, value)
+        for key, value in BOOL_SETTINGS.items():
+            try:
+                setattr(self, key, config.getboolean(
+                    "plugins", "autoqueue_%s" % key))
+            except:
+                setattr(self, key, value)
+                config.set("plugins", "autoqueue_%s" % key, value)
+        for key, value in STR_SETTINGS.items():
+            try:
+                setattr(self, key, config.get("plugins", "autoqueue_%s" % key))
+            except:
+                setattr(self, key, value)
+                config.set("plugins", "autoqueue_%s" % key, value)
+                
     def create_db(self):
         connection = sqlite.connect(self.DB)
         cursor = self.connection.cursor()
@@ -99,15 +137,24 @@ class AutoQueue(EventPlugin):
                    self._blocked_artists_times)
         pickler.dump(to_dump)
         return 0
+
+    def enabled(self):
+        self.__enabled = True
+
+    def disabled(self):
+        self.__enabled = False
+
     
     def plugin_on_song_started(self, song):
         if song is None: return
         self.now = datetime.now()
         self.added = 0
         self.artist_name, self.title = self.get_artist_and_title(song)
+        if not self.artist_name or not self.title: return
         self.block_artist(self.artist_name)
         self.song = song
-        if len(main.playlist.q) > self.desired_queue_length and self.reorder:
+        if self.desired_queue_length >= 0 and len(
+            main.playlist.q) > self.desired_queue_length and self.reorder:
             bg = threading.Thread(
                 None,
                 self.reorder_queue,
@@ -129,7 +176,7 @@ class AutoQueue(EventPlugin):
     def unblock_artists(self):
         while self._blocked_artists_times:
             if self._blocked_artists_times[
-                0] + self.artist_block_time > self.now:
+                0] + timedelta(self.artist_block_time) > self.now:
                 break
             log("Unblocked %s (%s)" % (
                 self._blocked_artists.pop(0),
@@ -239,6 +286,9 @@ class AutoQueue(EventPlugin):
         if tw == 0: return
         main.playlist.unqueue(songs)
         weighted_songs.sort(reverse=True)
+        log("sorted: %s" % repr(
+            [(score, i, song["artist"] + " - " + song["title"]) for score,
+             i, song in weighted_songs]))
         main.playlist.enqueue([w_song[2] for w_song in weighted_songs])
             
     def queue(self, search, to_add, by="track"):
@@ -323,11 +373,12 @@ class AutoQueue(EventPlugin):
         self, by_songs, for_songs, by="track"):
         weighted_songs = []
         total_weight = 0
+        len_songs = len(for_songs)
         for i, song in enumerate(for_songs):
             weight = self.get_match(by_songs, song, by=by)
             if self.include_rating:
                 weight = int(weight * song["~#rating"])
-            weighted_songs.append((weight, i, song))
+            weighted_songs.append((weight, len_songs - i, song))
             total_weight += weight
         return total_weight, weighted_songs
         
@@ -350,7 +401,6 @@ class AutoQueue(EventPlugin):
                 match += self.get_tag_match(song.list("tag"), q_song.list("tag"))
             else:
                 match += self.get_artist_match(artist_name, q_artist_name)
-        log("match: (%s) %s - %s" % (match, artist_name, title))
         return match
     
     def get_track_match(self, a1, t1, a2, t2):
@@ -471,8 +521,8 @@ class AutoQueue(EventPlugin):
             id)
         reverse_lookup = cursor.fetchall()
         if updated:
-            updated = datetime.strptime(updated, "%Y-%m-%d %H:%M:%S")
-            if updated + self.cache_time > self.now:
+            updated = datetime(*strptime(updated, "%Y-%m-%d %H:%M:%S")[0:6])
+            if updated + timedelta(self.cache_time) > self.now:
                 log(
                     "Getting similar artists from db for: %s " %
                     self.artist_name)
@@ -495,8 +545,8 @@ class AutoQueue(EventPlugin):
             id)
         reverse_lookup = cursor.fetchall()
         if updated:
-            updated = datetime.strptime(updated, "%Y-%m-%d %H:%M:%S") 
-            if updated + self.cache_time > self.now:
+            updated = datetime(*strptime(updated, "%Y-%m-%d %H:%M:%S")[0:6])
+            if updated + timedelta(self.cache_time) > self.now:
                 log("Getting similar tracks from db for: %s - %s" % (
                     self.artist_name, self.title))
                 cursor.execute(
@@ -574,3 +624,66 @@ class AutoQueue(EventPlugin):
                 continue
             self._insert_track_match(id, id2, match)
         self._update_track(id)
+
+    def bool_changed(self, b):
+        if b.get_active():
+            setattr(self, b.get_name(), True)
+        else:
+            setattr(self, b.get_name(), False)
+        config.set('plugins', "autoqueue_%s" % b.get_name(), b.get_active())
+
+    def PluginPreferences(self, parent):
+        vb = gtk.VBox(spacing = 3)
+        tooltips = gtk.Tooltips().set_tip
+
+        ## pattern_box = gtk.HBox(spacing = 3)
+        ## pattern_box.set_border_width(3)
+
+        ## pattern = gtk.Entry()
+        ## pattern.set_text(self.pattern)
+        ## pattern.connect('changed', self.pattern_changed)
+        ## pattern_box.pack_start(gtk.Label("Pattern:"), expand = False)
+        ## pattern_box.pack_start(pattern)
+
+        ## accounts_box = gtk.HBox(spacing = 3)
+        ## accounts_box.set_border_width(3)
+        ## accounts = gtk.Entry()
+        ## accounts.set_text(join(self.accounts))
+        ## accounts.connect('changed', self.accounts_changed)
+        ## tooltips(accounts, "List accounts, separated by spaces, for "
+        ##                      "changing status message. If none are specified, "
+        ##                      "status message of all accounts will be changed.")
+        ## accounts_box.pack_start(gtk.Label("Accounts:"), expand = False)
+        ## accounts_box.pack_start(accounts)
+
+        ## c = gtk.CheckButton(label="Add '[paused]'")
+        ## c.set_active(self.paused)
+        ## c.connect('toggled', self.paused_changed)
+        ## tooltips(c, "If checked, '[paused]' will be added to "
+        ##             "status message on pause.")
+
+        table = gtk.Table()
+        self.list = []
+        i = 0
+        j = 0
+        for status in BOOL_SETTINGS.keys():
+            button = gtk.CheckButton(label=status)
+            button.set_name(status)
+            button.set_active(
+                config.getboolean("plugins", "autoqueue_%s" % status))
+            button.connect('toggled', self.bool_changed)
+            self.list.append(button)
+            table.attach(button, i, i+1, j, j+1)
+            if i == 2:
+                i = 0
+                j += 1
+            else:
+                i += 1
+
+        ## vb.pack_start(pattern_box)
+        ## vb.pack_start(accounts_box)
+        ## vb.pack_start(c)
+        vb.pack_start(Frame(label="Thingum"))
+        vb.pack_start(table)
+
+        return vb
