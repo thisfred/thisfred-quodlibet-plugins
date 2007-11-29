@@ -173,6 +173,14 @@ class AutoQueue(EventPlugin):
         log("Blocked artist: %s (%s)" % (
             artist_name,
             len(self._blocked_artists)))
+        try:
+            os.remove(self.DUMP)
+        except OSError: pass
+        if len(self._blocked_artists) == 0: return
+        pickler = Pickler(open(self.DUMP, 'w'), -1)
+        to_dump = (self._blocked_artists,
+                   self._blocked_artists_times)
+        pickler.dump(to_dump)
 
     def unblock_artists(self):
         while self._blocked_artists_times:
@@ -278,22 +286,26 @@ class AutoQueue(EventPlugin):
 
     def reorder_queue(self, song, songs):
         if not len(songs) > 1: return
+        main.playlist.unqueue(songs)
         if self.by_tags:
-            self._reorder_queue_helper(song, songs, by="tag")
+            songs = self._reorder_queue_helper(song, songs, by="tag")
         if self.by_artists:
-            self._reorder_queue_helper(song, songs, by="artist")
+            songs = self._reorder_queue_helper(song, songs, by="artist")
         if self.by_tracks:
-            self._reorder_queue_helper(song, songs, by="track")
+            songs = self._reorder_queue_helper(song, songs, by="track")
+        main.playlist.enqueue(songs)
         
     def _reorder_queue_helper(self, song, songs, by="track"):
         tw, weighted_songs = self.get_weights([song], songs, by=by)
-        if tw == 0: return
-        main.playlist.unqueue(songs)
-        weighted_songs.sort(reverse=True)
-        log("sorted: %s" % repr(
+        if tw == 0: return songs
+        log("unsorted: %s" % repr(
             [(score, i, song["artist"] + " - " + song["title"]) for score,
              i, song in weighted_songs]))
-        main.playlist.enqueue([w_song[2] for w_song in weighted_songs])
+        weighted_songs.sort(reverse=True)
+        log("sorted by %s: %s" % (by, repr(
+            [(score, i, song["artist"] + " - " + song["title"]) for score,
+             i, song in weighted_songs])))
+        return [w_song[2] for w_song in weighted_songs]
             
     def queue(self, search, to_add, by="track"):
         try:
