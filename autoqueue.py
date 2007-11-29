@@ -47,7 +47,8 @@ BOOL_SETTINGS = {
     "by_tags": True,
     "queue_similarity": True,
     "reorder": True,
-    "random_skip": True,}
+    "random_skip": True,
+    "increasing_skip": False,}
 
 STR_SETTINGS = {
     "pick": "best",}
@@ -191,11 +192,14 @@ class AutoQueue(EventPlugin):
 
     def add_to_queue(self):
         if self.random_skip and self.queued:
-            trigger = random.random() * ((-1.0/self.queued) + 1.0)
+            trigger = random.random()
+            if self.increasing_skip:
+                trigger = trigger * ((-1.0/self.queued) + 1.0)
             rating = self.song["~#rating"]
             log("trigger: %s rating: %s" % (trigger, rating))
             if trigger > rating:
                 self.queued = 0
+                self.reorder_queue(self.song, main.playlist.q.get())
                 return
         queue_length = len(main.playlist.q)
         self.unblock_artists()
