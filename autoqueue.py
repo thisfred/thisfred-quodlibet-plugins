@@ -12,6 +12,7 @@ import urllib, threading
 import random, os
 from xml.dom import minidom
 from cPickle import Pickler, Unpickler
+
 try:
     import sqlite
     SQL = True
@@ -24,6 +25,7 @@ from widgets import main
 from parse import Query
 from qltk.songlist import SongList
 from qltk import Frame
+from library import library
 import config
 
 TRACK_URL = "http://ws.audioscrobbler.com/1.0/track/%s/%s/similar.xml"
@@ -91,7 +93,8 @@ class AutoQueue(EventPlugin):
         self.queued = 0
         # Set up exit hook to dump queue
         gtk.quit_add(0, self.dump_stuff)
-
+        self.blocked = False
+        
     def read_config(self):
         for key, value in INT_SETTINGS.items():
             try:
@@ -147,6 +150,7 @@ class AutoQueue(EventPlugin):
 
     
     def plugin_on_song_started(self, song):
+        if self.blocked: return
         if song is None: return
         self.now = datetime.now()
         self.added = 0
@@ -166,6 +170,7 @@ class AutoQueue(EventPlugin):
         bg = threading.Thread(None, self.add_to_queue) 
         bg.setDaemon(True)
         bg.start()
+        
 
     def block_artist(self, artist_name):
         self._blocked_artists.append(artist_name)
@@ -199,6 +204,7 @@ class AutoQueue(EventPlugin):
             song.comma("artist").lower() for song in main.playlist.q.get()]
 
     def add_to_queue(self):
+        self.blocked = True
         if self.random_skip:
             trigger = random.random()
             if self.increasing_skip and self.queued:
@@ -208,6 +214,7 @@ class AutoQueue(EventPlugin):
             if trigger > rating:
                 self.queued = 0
                 self.reorder_queue(self.song, main.playlist.q.get())
+                self.blocked = False
                 return
         queue_length = len(main.playlist.q)
         self.unblock_artists()
@@ -283,8 +290,13 @@ class AutoQueue(EventPlugin):
             self.queued = 0
         if self.reorder:
             self.reorder_queue(self.song, main.playlist.q.get())
-
+        self.blocked = False
+            
     def reorder_queue(self, song, songs):
+        unblock = False
+        if not self.blocked:
+            unblock = True
+            self.blocked = True
         old = songs[:]
         if not len(songs) > 1: return
         if self.by_tags:
@@ -297,8 +309,11 @@ class AutoQueue(EventPlugin):
             return
         self._unqueue(old)
         self._queue(songs)
+        if unblock:
+            self.blocked = False
         
     def _queue(self, songs):
+        songs = filter(lambda s: s.can_add, songs)
         old_length = len(main.playlist.q)
         main.playlist.enqueue(songs)
         while len(main.playlist.q) < len(songs) + old_length:
@@ -325,7 +340,7 @@ class AutoQueue(EventPlugin):
     def queue(self, search, to_add, by="track"):
         try:
             myfilter = Query(search).search
-            songs = filter(myfilter, main.browser._library.itervalues())
+            songs = filter(myfilter, library.itervalues())
         except (Query.error, RuntimeError): return
         log("%s songs found" % len(songs))
         n = min(to_add, len(songs))
