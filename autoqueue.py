@@ -199,9 +199,9 @@ class AutoQueue(EventPlugin):
             song.comma("artist").lower() for song in main.playlist.q.get()]
 
     def add_to_queue(self):
-        if self.random_skip and self.queued:
+        if self.random_skip:
             trigger = random.random()
-            if self.increasing_skip:
+            if self.increasing_skip and self.queued:
                 trigger = trigger * ((-1.0/self.queued) + 1.0)
             rating = self.song["~#rating"]
             log("trigger: %s rating: %s" % (trigger, rating))
@@ -285,15 +285,30 @@ class AutoQueue(EventPlugin):
             self.reorder_queue(self.song, main.playlist.q.get())
 
     def reorder_queue(self, song, songs):
+        old = songs[:]
         if not len(songs) > 1: return
-        main.playlist.unqueue(songs)
         if self.by_tags:
             songs = self._reorder_queue_helper(song, songs, by="tag")
         if self.by_artists:
             songs = self._reorder_queue_helper(song, songs, by="artist")
         if self.by_tracks:
             songs = self._reorder_queue_helper(song, songs, by="track")
+        if songs == old:
+            return
+        self._unqueue(old)
+        self._queue(songs)
+        
+    def _queue(self, songs):
+        old_length = len(main.playlist.q)
         main.playlist.enqueue(songs)
+        while len(main.playlist.q) < len(songs) + old_length:
+            log("waiting to queue")
+
+    def _unqueue(self, songs):
+        old_length = len(main.playlist.q)
+        main.playlist.unqueue(songs)
+        while len(main.playlist.q) + len(songs) > old_length:
+            log("waiting to unqueue")
         
     def _reorder_queue_helper(self, song, songs, by="track"):
         tw, weighted_songs = self.get_weights([song], songs, by=by)
@@ -337,8 +352,8 @@ class AutoQueue(EventPlugin):
                 adds.append(song)
                 self.added += 1
                 self.queued += 1
-        main.playlist.enqueue(adds)
-        
+        self._queue(adds)
+
     def enqueue_weighted_sample(
         self, songs, n, by="track", queue_similarity=True):
         by_songs = [self.song]
@@ -364,7 +379,7 @@ class AutoQueue(EventPlugin):
             adds.append(song)
             self.added += 1
             self.queued += 1
-        main.playlist.enqueue(adds)
+        self._queue(adds)
         
     def enqueue_best_sample(self, songs, n, by="track", queue_similarity=True):
         by_songs = [self.song]
@@ -383,7 +398,7 @@ class AutoQueue(EventPlugin):
             adds.append(song)
             self.added += 1
             self.queued += 1
-        main.playlist.enqueue(adds)
+        self._queue(adds)
     
     def get_weights(
         self, by_songs, for_songs, by="track"):
