@@ -121,9 +121,8 @@ class AutoQueue(EventPlugin):
         #log("create_db")
         """ Set up a database for the artist and track similarity scores
         """
-        self.connection = sqlite.connect(self.DB)
-        cursor = self.connection.cursor()
-        cursor = self.cursor
+        connection = sqlite.connect(self.DB)
+        cursor = connection.cursor()
         cursor.execute(
             'CREATE TABLE artists (id INTEGER PRIMARY KEY, name VARCHAR(100), updated DATE)')
         cursor.execute(
@@ -132,7 +131,7 @@ class AutoQueue(EventPlugin):
             'CREATE TABLE tracks (id INTEGER PRIMARY KEY, artist INTEGER, title VARCHAR(100), updated DATE)')
         cursor.execute(
             'CREATE TABLE track_2_track (track1 INTEGER, track2 INTEGER, match INTEGER)')
-        self.connection.commit()
+        connection.commit()
         
     def dump_stuff(self):
         """dump persistent data to pickles
