@@ -408,7 +408,7 @@ class AutoQueue(EventPlugin):
     def enqueue_weighted_sample(
         self, songs, n, by="track", queue_similarity=True):
         #log("enqueue_weighted_sample(%s, %s, by=%s, queue_similarity=%s)" % (
-            songs, n, by, queue_similarity))
+        #    songs, n, by, queue_similarity))
         by_songs = [self.song]
         if queue_similarity:
             by_songs.extend(main.playlist.q.get())
@@ -436,7 +436,7 @@ class AutoQueue(EventPlugin):
         
     def enqueue_best_sample(self, songs, n, by="track", queue_similarity=True):
         #log("enqueue_best_sample(%s, %s, by=%s, queue_similarity=%s)" % (
-            songs, n, by, queue_similarity))
+        #    songs, n, by, queue_similarity))
         by_songs = [self.song]
         if queue_similarity:
             by_songs.extend(main.playlist.q.get())
