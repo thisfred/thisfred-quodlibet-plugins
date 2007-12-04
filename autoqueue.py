@@ -310,7 +310,7 @@ class AutoQueue(EventPlugin):
     def get_blocked_artists(self):
         # prevent artists already in the queue from being queued
         return self._blocked_artists + [
-            song.comma("artist").lower() for song in main.playlist.q.get()]
+            song.comma("artist").lower() for song in self.queue_songs]
 
     def reorder_queue(self):
         if not len(self.queue_songs) > 1: return
@@ -326,6 +326,7 @@ class AutoQueue(EventPlugin):
         
     def process_queue(self):
         if len(self.queue_songs) == 0: return
+        if self.queue_songs == main.playlist.q.get(): return
         main.playlist.q.clear()
         log("process_queue([%s])" % len(self.queue_songs))
         songs = filter(lambda s: s.can_add, self.queue_songs)
@@ -334,7 +335,9 @@ class AutoQueue(EventPlugin):
         
     def _reorder_queue_helper(self, song, songs, by="track"):
         tw, weighted_songs = self.get_weights([song], songs, by=by)
-        if tw == 0: return songs
+        if tw == 0:
+            log("already sorted by %s" % by)
+            return songs
         log("unsorted: %s" % repr(
             [(score, i, song["artist"] + " - " + song["title"]) for score,
              i, song in weighted_songs]))
