@@ -77,6 +77,7 @@ class AutoQueue(EventPlugin):
     __enabled = False
     
     def __init__(self):
+        self.blocked = False
         self.read_config()
         try:
             unpickler = Unpickler(open(self.DUMP, 'r'))
@@ -167,24 +168,26 @@ class AutoQueue(EventPlugin):
         self.block_artist(self.artist_name)
         self.song = song
         self.queue_songs = main.playlist.q.get()[:]
-        # if there are enough songs in the queue, do not lookup new
-        # ones to queue
         # look up songs and add them to the queue
         bg = threading.Thread(None, self.add_to_queue) 
         bg.setDaemon(True)
         bg.start()
         
     def add_to_queue(self):
+        if self.blocked: return
+        self.blocked = True
         # if true it is less likely similar tracks are queued the
         # lower rated a track is
         if self.desired_queue_length >= 0 and len(
             self.queue_songs) > self.desired_queue_length:
             if not self.reorder:
+                self.blocked = False
                 return
             # but do reorder the queue (if so desired) by similarity
             # to the playing song
             self.reorder_queue()
             self.process_queue()
+            self.blocked = False
             return
         if self.random_skip:
             trigger = random.random()
@@ -196,6 +199,7 @@ class AutoQueue(EventPlugin):
                 self.queued = 0
                 self.reorder_queue()
                 self.process_queue()
+                self.blocked = False
                 return
         queue_length = len(self.queue_songs)
         self.unblock_artists()
@@ -272,7 +276,8 @@ class AutoQueue(EventPlugin):
         if self.reorder:
             self.reorder_queue()
         self.process_queue()
-
+        self.blocked = False
+        
     def block_artist(self, artist_name):
         # store artist name and current daytime so songs by that
         # artist can be blocked
@@ -332,6 +337,7 @@ class AutoQueue(EventPlugin):
         songs = filter(lambda s: s.can_add, self.queue_songs)
         log("filtered songs: [%s]" % len(songs))
         main.playlist.enqueue(songs)
+        sleep(5)
         
     def _reorder_queue_helper(self, song, songs, by="track"):
         tw, weighted_songs = self.get_weights([song], songs, by=by)
