@@ -166,15 +166,15 @@ class AutoQueue(EventPlugin):
         # add the artist to the blocked list, so their songs won't be
         # played for a determined number of days
         self.block_artist(self.artist_name)
-        self.song = song
-        self.queue_songs = main.playlist.q.get()[:]
         # look up songs and add them to the queue
-        bg = threading.Thread(None, self.add_to_queue) 
+        self.queue_songs = main.playlist.q.get()[:]
+        bg = threading.Thread(None, self.add_to_queue, args=(song,)) 
         bg.setDaemon(True)
         bg.start()
         
-    def add_to_queue(self):
+    def add_to_queue(self, song):
         if self.blocked: return
+        self.song = song
         self.blocked = True
         # if true it is less likely similar tracks are queued the
         # lower rated a track is
