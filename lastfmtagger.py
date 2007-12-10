@@ -13,14 +13,14 @@ from sets import Set
 from xml.dom import minidom
 from random import randint
 from qltk.entry import ValidatingEntry
-
+from library import library
 
 def to(string): print string.encode("ascii", "replace")
 
 from plugins.events import EventPlugin
 
 # Set this to True to enable logging
-verbose = False
+verbose = True
 
 def log(msg):
     if verbose:
@@ -132,10 +132,10 @@ class LastFMTagger(EventPlugin):
             return cached_tags
         try:
             stream = urllib.urlopen(url)
+            xmldoc = minidom.parse(stream).documentElement
         except:
             self.lastfm_cache[url] = tags
             return tags
-        xmldoc = minidom.parse(stream).documentElement
         tagnodes = xmldoc.getElementsByTagName("tag")
         for tagnode in tagnodes:
             if prefix is not None:
@@ -237,6 +237,7 @@ class LastFMTagger(EventPlugin):
         try:
             song[self.tag] = '\n'.join(tags)
             log("saved tags")
+            library.changed([song])
         except:
             pass
 

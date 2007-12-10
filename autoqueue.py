@@ -79,10 +79,12 @@ class AutoQueue(EventPlugin):
     def __init__(self):
         self.blocked = False
         self.read_config()
+        pickle = open(self.DUMP, 'r')
         try:
-            unpickler = Unpickler(open(self.DUMP, 'r'))
+            unpickler = Unpickler(pickle)
             self._blocked_artists, self._blocked_artists_times = unpickler.load()
-        except IOError: pass
+        finally:
+            pickle.close()
         if self.cache:
             try:
                 os.stat(self.DB)
@@ -139,10 +141,13 @@ class AutoQueue(EventPlugin):
             os.remove(self.DUMP)
         except OSError: pass
         if len(self._blocked_artists) == 0: return 0
-        pickler = Pickler(open(self.DUMP, 'w'), -1)
-        to_dump = (self._blocked_artists,
-                   self._blocked_artists_times)
-        pickler.dump(to_dump)
+        pickle = open(self.DUMP, 'w')
+        try:
+            pickler = Pickler(pickle, -1)
+            to_dump = (self._blocked_artists, self._blocked_artists_times)
+            pickler.dump(to_dump)
+        finally:
+            pickle.close()
         return 0
 
     def enabled(self):
@@ -168,12 +173,12 @@ class AutoQueue(EventPlugin):
         self.block_artist(self.artist_name)
         # look up songs and add them to the queue
         self.queue_songs = main.playlist.q.get()[:]
+        if self.blocked: return
         bg = threading.Thread(None, self.add_to_queue, args=(song,)) 
         bg.setDaemon(True)
         bg.start()
         
     def add_to_queue(self, song):
-        if self.blocked: return
         self.song = song
         self.blocked = True
         # if true it is less likely similar tracks are queued the
@@ -336,17 +341,18 @@ class AutoQueue(EventPlugin):
         log("process_queue([%s])" % len(self.queue_songs))
         songs = filter(lambda s: s.can_add, self.queue_songs)
         log("filtered songs: [%s]" % len(songs))
-        main.playlist.enqueue(songs)
-        sleep(5)
+        for song in songs:
+            try:
+                log("queueing %s - %s" % (song.comma("artist"), song["title"]))
+                main.playlist.enqueue([song])
+            except TypeError:
+                log("Type Error while queueing %s" % song)
         
     def _reorder_queue_helper(self, song, songs, by="track"):
         tw, weighted_songs = self.get_weights([song], songs, by=by)
         if tw == 0:
             log("already sorted by %s" % by)
             return songs
-        log("unsorted: %s" % repr(
-            [(score, i, song["artist"] + " - " + song["title"]) for score,
-             i, song in weighted_songs]))
         weighted_songs.sort(reverse=True)
         log("sorted by %s: %s" % (by, repr(
             [(score, i, song["artist"] + " - " + song["title"]) for score,
