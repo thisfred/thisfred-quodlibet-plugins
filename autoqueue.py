@@ -340,13 +340,8 @@ class AutoQueue(EventPlugin):
         main.playlist.q.clear()
         log("process_queue([%s])" % len(self.queue_songs))
         songs = filter(lambda s: s.can_add, self.queue_songs)
-        log("filtered songs: [%s]" % len(songs))
-        for song in songs:
-            try:
-                log("queueing %s - %s" % (song.comma("artist"), song["title"]))
-                main.playlist.enqueue([song])
-            except TypeError:
-                log("Type Error while queueing %s" % song)
+        log("queuing songs: [%s]" % len(songs))
+        main.playlist.enqueue(songs)
         
     def _reorder_queue_helper(self, song, songs, by="track"):
         tw, weighted_songs = self.get_weights([song], songs, by=by)
@@ -354,9 +349,9 @@ class AutoQueue(EventPlugin):
             log("already sorted by %s" % by)
             return songs
         weighted_songs.sort(reverse=True)
-        log("sorted by %s: %s" % (by, repr(
-            [(score, i, song["artist"] + " - " + song["title"]) for score,
-             i, song in weighted_songs])))
+        log("sorted by %s: \n%s" % (by, "\n".join(["%05d %03d %s - %s" % (
+            score, i, song.comma("artist"), song.comma("title"))
+            for score, i, song in weighted_songs])))
         return [w_song[2] for w_song in weighted_songs]
             
     def queue(self, search, to_add, by="track"):
