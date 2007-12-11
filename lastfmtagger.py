@@ -10,6 +10,7 @@ import md5, urllib, time, threading, os
 import player, config, const, widgets, parse
 import gobject, gtk, xmlrpclib, socket
 from sets import Set
+from time import time
 from xml.dom import minidom
 from random import randint
 from qltk.entry import ValidatingEntry
@@ -34,7 +35,7 @@ class LastFMTagger(EventPlugin):
     PLUGIN_ICON = gtk.STOCK_CONNECT
     PLUGIN_VERSION = "0.3"
     CLIENT = "tst"
-    PROTOCOL_VERSION = "1.1"
+    PROTOCOL_VERSION = "1.2"
     TRACK_TAG_URL = "http://ws.audioscrobbler.com/1.0/user/%s/tracktags.xml?artist=%s&track=%s"
     ARTIST_TAG_URL = "http://ws.audioscrobbler.com/1.0/user/%s/artisttags.xml?artist=%s"
     ALBUM_TAG_URL = "http://ws.audioscrobbler.com/1.0/user/%s/albumtags.xml?artist=%s&album=%s"
@@ -158,7 +159,7 @@ class LastFMTagger(EventPlugin):
             tag.startswith('album:') or tag.startswith('artist:')))
         if track_tags.issubset(lastfm_tags):
             return track_tags
-        random_string, md5hash = self.get_hash()
+        random_string, md5hash = self.get_timestamp()
         title = song.comma("title")
         if "version" in song:
             title += " (%s)" % song.comma("version").encode("utf-8")
@@ -186,7 +187,7 @@ class LastFMTagger(EventPlugin):
         artist_tags = Set(tag for tag in tags if tag.startswith('artist:'))
         if artist_tags.issubset(lastfm_tags):
             return artist_tags
-        random_string, md5hash = self.get_hash()
+        random_string, md5hash = self.get_timestamp()
         self._submit_artist_tags(
             self.username,
             random_string,
@@ -210,7 +211,7 @@ class LastFMTagger(EventPlugin):
         album_tags = Set(tag for tag in tags if tag.startswith('album:'))
         if album_tags.issubset(lastfm_tags):
             return album_tags
-        random_string, md5hash = self.get_hash()
+        random_string, md5hash = self.get_timestamp()
         server = xmlrpclib.ServerProxy(
             "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
         self._submit_album_tags(
@@ -270,7 +271,8 @@ class LastFMTagger(EventPlugin):
         log("syncing tags")
         title = urllib.quote(song.comma("title").encode("utf-8"))
         if "version" in song:
-            title += " (%s)" % song.comma("version").encode("utf-8")
+            title += urllib.quote(
+                " (%s)" % song.comma("version").encode("utf-8"))
         artist = urllib.quote(song.comma("artist").encode("utf-8"))
         album =  urllib.quote(song.comma("album").encode("utf-8"))
         ql_tags = Set()
@@ -284,9 +286,9 @@ class LastFMTagger(EventPlugin):
         if all_tags > ql_tags:
             self.save_tags(song, all_tags)
         
-    def get_hash(self):
-        random_string = str(1000000000 + randint(0,900000000))
-        return random_string, md5.md5(self.password + random_string).hexdigest()
+    def get_timestamp(self):
+        timestamp = str(int(time()))
+        return timestamp, md5.md5(self.password + timestamp).hexdigest()
         
     def PluginPreferences(self, parent):
 
