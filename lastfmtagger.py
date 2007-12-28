@@ -60,10 +60,16 @@ class LastFMTagger(EventPlugin):
     
     def plugin_on_song_started(self, song):
         if song is None: return
-        bg = threading.Thread(None, self.sync_tags, args=(song,))
+        bg = threading.Thread(None, self.sync_tags, args=(song,'down'))
         bg.setDaemon(True)
         bg.start()
-    
+
+    def plugin_on_song_ended(self, song, skipped):
+        if song is None: return
+        bg = threading.Thread(None, self.sync_tags, args=(song,'up'))
+        bg.setDaemon(True)
+        bg.start()
+        
     def read_config(self):
         username = ""
         password = ""
@@ -151,14 +157,10 @@ class LastFMTagger(EventPlugin):
         self.lastfm_cache[url] = tags
         return tags
         
-    def submit_track_tags(self, song, tags, lastfm_tags):
+    def submit_track_tags(self, song, tags):
         """Submit the tags to last.fm if locally changes are detected.
         """
         log("submitting track tags: %s " % ', '.join(tags))
-        track_tags = Set(tag for tag in tags if not (
-            tag.startswith('album:') or tag.startswith('artist:')))
-        if track_tags.issubset(lastfm_tags):
-            return track_tags
         random_string, md5hash = self.get_timestamp()
         title = song.comma("title")
         if "version" in song:
@@ -169,48 +171,48 @@ class LastFMTagger(EventPlugin):
             md5hash,
             song["artist"],
             title,
-            list(track_tags),
+            list(tags),
             'set')
-        return track_tags
 
     def _submit_track_tags(self, *args):
         log("submitting track tags: %s " % repr(args))
-        try:
-            server = xmlrpclib.ServerProxy(
-                "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
-            server.tagTrack(*args)
-        except:
-            pass
+        #try:
+        server = xmlrpclib.ServerProxy(
+            "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
+        server.tagTrack(*args)
+        #except:
+        #    pass
 
-    def submit_artist_tags(self, song, tags, lastfm_tags):
+    def get_tags_for(self, tags, for_=""):
+        if for_:
+            return Set(tag for tag in tags if tag.startswith('%s:' % for_))
+        return Set(tag for tag in tags if not (
+            tag.startswith('album:') or tag.startswith('artist:')))
+        
+    def submit_artist_tags(self, song, tags):
         log("submitting artist tags: %s " % ', '.join(tags))
-        artist_tags = Set(tag for tag in tags if tag.startswith('artist:'))
-        if artist_tags.issubset(lastfm_tags):
-            return artist_tags
         random_string, md5hash = self.get_timestamp()
         self._submit_artist_tags(
             self.username,
             random_string,
             md5hash,
             song["artist"],
-            [':'.join(tag.split(':')[1:]) for tag in artist_tags],
+            [':'.join(tag.split(':')[1:]) for tag in tags],
             'set')
-        return artist_tags
 
     def _submit_artist_tags(self, *args):
         log("submitting artist tags: %s " % repr(args))
-        try:
-            server = xmlrpclib.ServerProxy(
-                "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
-            server.tagArtist(*args)
-        except:
-            pass
+        #try:
+        server = xmlrpclib.ServerProxy(
+            "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
+        server.tagArtist(*args)
+        #except:
+        #    pass
 
-    def submit_album_tags(self, song, tags, lastfm_tags):
+    def submit_album_tags(self, song, tags):
         log("submitting album tags: %s " % ', '.join(tags))
         album_tags = Set(tag for tag in tags if tag.startswith('album:'))
-        if album_tags.issubset(lastfm_tags):
-            return album_tags
+        if not album_tags: return album_tags
         random_string, md5hash = self.get_timestamp()
         server = xmlrpclib.ServerProxy(
             "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
@@ -220,18 +222,17 @@ class LastFMTagger(EventPlugin):
             md5hash,
             song["artist"],
             song["album"],
-            [':'.join(tag.split(':')[1:]) for tag in album_tags],
+            [':'.join(tag.split(':')[1:]) for tag in tags],
             'set')
-        return album_tags
     
     def _submit_album_tags(self, *args):
         log("submitting album tags: %s " % repr(args))
-        try:
-            server = xmlrpclib.ServerProxy(
-                "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
-            server.tagAlbum(*args)
-        except:
-            pass
+        #try:
+        server = xmlrpclib.ServerProxy(
+            "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
+        server.tagAlbum(*args)
+        #except:
+        #    pass
 
     def save_tags(self, song, tags):
         log("saving tags: %s" % ', '.join(tags))
@@ -245,17 +246,26 @@ class LastFMTagger(EventPlugin):
 
     def submit_tags(self, song, artist, album, title, all_tags, lastfm_tags):
         log("submitting tags: %s" % ', '.join(all_tags))
-        track_tags = self.submit_track_tags(song, all_tags, lastfm_tags)
+        track_tags = self.get_tags_for(all_tags)
+        lastfm_track_tags = self.get_tags_for(lastfm_tags)
+        if track_tags != lastfm_track_tags:
+            self.submit_track_tags(song, track_tags)
         self.lastfm_cache[
             self.TRACK_TAG_URL % (self.username, artist, title)] = track_tags
-        artist_tags = self.submit_artist_tags(song, all_tags, lastfm_tags)
+        artist_tags = self.get_tags_for(all_tags, for_="artist")
+        lastfm_artist_tags = self.get_tags_for(lastfm_tags, for_="artist")
+        if artist_tags != lastfm_artist_tags:
+            self.submit_artist_tags(song, artist_tags)
         self.lastfm_cache[
             self.ARTIST_TAG_URL % (self.username, artist)] = artist_tags
-        album_tags = self.submit_album_tags(song, all_tags, lastfm_tags)
+        album_tags = self.get_tags_for(all_tags, for_="album")
+        lastfm_album_tags = self.get_tags_for(lastfm_tags, for_="album")
+        if album_tags != lastfm_album_tags:
+            self.submit_album_tags(song, album_tags)
         self.lastfm_cache[
             self.ALBUM_TAG_URL % (self.username, artist, album)] = album_tags
         
-    def sync_tags(self, song):
+    def sync_tags(self, song, direction):
         """
         This is the meat of the plugin. What it does is get the user's
         tags for the current track, album and artist from the in
@@ -277,14 +287,20 @@ class LastFMTagger(EventPlugin):
         album =  urllib.quote(song.comma("album").encode("utf-8"))
         ql_tags = Set()
         ql_tag_comma = song.comma(self.tag)
+        log("local tags: %s" % ql_tag_comma)
         if ql_tag_comma:
             ql_tags = Set(ql_tag_comma.split(", "))
         lastfm_tags = self.get_lastfm_tags(title, artist, album)
-        all_tags = ql_tags | lastfm_tags
-        if all_tags > lastfm_tags:
-            self.submit_tags(song, artist, album, title, all_tags, lastfm_tags)
-        if all_tags > ql_tags:
-            self.save_tags(song, all_tags)
+        if direction == 'down':
+            all_tags = ql_tags | lastfm_tags
+        else:
+            all_tags = ql_tags
+        if direction == 'up':
+            if all_tags != lastfm_tags:
+                self.submit_tags(song, artist, album, title, all_tags, lastfm_tags)
+        if direction == 'down':
+            if all_tags > ql_tags:
+                self.save_tags(song, all_tags)
         
     def get_timestamp(self):
         timestamp = str(int(time()))
