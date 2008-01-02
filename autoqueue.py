@@ -83,6 +83,8 @@ class AutoQueue(EventPlugin):
         try:
             unpickler = Unpickler(pickle)
             self._blocked_artists, self._blocked_artists_times = unpickler.load()
+        except:
+            pass
         finally:
             pickle.close()
         if self.cache:
