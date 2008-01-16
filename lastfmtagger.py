@@ -176,12 +176,12 @@ class LastFMTagger(EventPlugin):
 
     def _submit_track_tags(self, *args):
         log("submitting track tags: %s " % repr(args))
-        #try:
-        server = xmlrpclib.ServerProxy(
-            "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
-        server.tagTrack(*args)
-        #except:
-        #    pass
+        try:
+            server = xmlrpclib.ServerProxy(
+                "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
+            server.tagTrack(*args)
+        except :
+            pass
 
     def get_tags_for(self, tags, for_=""):
         if for_:
@@ -202,12 +202,12 @@ class LastFMTagger(EventPlugin):
 
     def _submit_artist_tags(self, *args):
         log("submitting artist tags: %s " % repr(args))
-        #try:
-        server = xmlrpclib.ServerProxy(
-            "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
-        server.tagArtist(*args)
-        #except:
-        #    pass
+        try:
+            server = xmlrpclib.ServerProxy(
+                "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
+            server.tagArtist(*args)
+        except:
+            pass
 
     def submit_album_tags(self, song, tags):
         log("submitting album tags: %s " % ', '.join(tags))
@@ -227,12 +227,12 @@ class LastFMTagger(EventPlugin):
     
     def _submit_album_tags(self, *args):
         log("submitting album tags: %s " % repr(args))
-        #try:
-        server = xmlrpclib.ServerProxy(
-            "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
-        server.tagAlbum(*args)
-        #except:
-        #    pass
+        try:
+            server = xmlrpclib.ServerProxy(
+                "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
+            server.tagAlbum(*args)
+        except:
+            pass
 
     def save_tags(self, song, tags):
         log("saving tags: %s" % ', '.join(tags))
