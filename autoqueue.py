@@ -15,7 +15,7 @@ from cPickle import Pickler, Unpickler
 from sets import Set
 
 try:
-    import sqlite
+    import sqlite3
     SQL = True
 except:
     SQL = False
@@ -58,6 +58,19 @@ def log(msg):
     if not verbose: return
     print "[autoqueue]", msg
 
+def cache(f):  
+    values = {}  
+    def cached(*args):  
+        if values.has_key(args):  
+            ## log("found cached: %s(%s): %s" % (
+            ##     repr(f), repr(args), repr(values[args])))
+            return values[args]  
+        else:  
+            r = f(*args)  
+            values[args] = r  
+            return r  
+    return cached
+
 class AutoQueue(EventPlugin):
     PLUGIN_ID = "AutoQueue"
     PLUGIN_NAME = _("Auto Queue")
@@ -92,8 +105,7 @@ class AutoQueue(EventPlugin):
                 os.stat(self.DB)
             except OSError:
                 self.create_db()
-            self.connection = sqlite.connect(self.DB)
-            self.cursor = self.connection.cursor()
+
         self.queued = 0
         # Set up exit hook to dump cache
         gtk.quit_add(0, self.dump_stuff)
@@ -124,7 +136,7 @@ class AutoQueue(EventPlugin):
         log("create_db")
         """ Set up a database for the artist and track similarity scores
         """
-        connection = sqlite.connect(self.DB)
+        connection = sqlite3.connect(self.DB)
         cursor = connection.cursor()
         cursor.execute(
             'CREATE TABLE artists (id INTEGER PRIMARY KEY, name VARCHAR(100), updated DATE)')
@@ -180,6 +192,7 @@ class AutoQueue(EventPlugin):
         bg.start()
         
     def add_to_queue(self, song):
+        self.connection = sqlite3.connect(self.DB)
         self.blocked = True
         self.song = song
         if self.desired_queue_length >= 0 and len(
@@ -540,33 +553,35 @@ class AutoQueue(EventPlugin):
                     match = int(float(matchnode[0].firstChild.nodeValue) * 100)
             artists.append((name, match))
         return artists
-        
+
+    @cache
     def get_artist(self, artist_name):
-        cursor = self.cursor
+        cursor = self.connection.cursor()
         artist_name = artist_name.encode("UTF-8")
-        cursor.execute("SELECT * FROM artists WHERE name = %s", artist_name)
+        cursor.execute("SELECT * FROM artists WHERE name = ?", (artist_name,))
         row = cursor.fetchone()
         if row:
             return row
-        cursor.execute("INSERT INTO artists (name) VALUES (%s)", artist_name)
+        cursor.execute("INSERT INTO artists (name) VALUES (?)", (artist_name,))
         self.connection.commit()
-        cursor.execute("SELECT * FROM artists WHERE name = %s", artist_name)
+        cursor.execute("SELECT * FROM artists WHERE name = ?", (artist_name,))
         return cursor.fetchone()
 
+    @cache
     def get_track(self, artist_name, title):
-        cursor = self.cursor
+        cursor = self.connection.cursor()
         title = title.encode("UTF-8")
         id = self.get_artist(artist_name)[0]
         cursor.execute(
-            "SELECT * FROM tracks WHERE artist = %s AND title = %s", (id, title))
+            "SELECT * FROM tracks WHERE artist = ? AND title = ?", (id, title))
         row = cursor.fetchone()
         if row:
             return row
         cursor.execute(
-            "INSERT INTO tracks (artist, title) VALUES (%s, %s)", (id, title))
+            "INSERT INTO tracks (artist, title) VALUES (?, ?)", (id, title))
         self.connection.commit()
         cursor.execute(
-            "SELECT * FROM tracks WHERE artist = %s AND title = %s", (id, title))
+            "SELECT * FROM tracks WHERE artist = ? AND title = ?", (id, title))
         return cursor.fetchone()
 
     def get_cached_similar_artists(self):
@@ -574,10 +589,10 @@ class AutoQueue(EventPlugin):
             return self.get_similar_artists()
         artist = self.get_artist(self.artist_name)
         id, updated = artist[0], artist[2]
-        cursor = self.cursor
+        cursor = self.connection.cursor()
         cursor.execute(
-            "SELECT name, match  FROM artist_2_artist INNER JOIN artists ON artist_2_artist.artist1 = artists.id WHERE artist_2_artist.artist2 = %s",
-            id)
+            "SELECT name, match  FROM artist_2_artist INNER JOIN artists ON artist_2_artist.artist1 = artists.id WHERE artist_2_artist.artist2 = ?",
+            (id,))
         reverse_lookup = cursor.fetchall()
         if updated:
             updated = datetime(*strptime(updated, "%Y-%m-%d %H:%M:%S")[0:6])
@@ -586,8 +601,8 @@ class AutoQueue(EventPlugin):
                     "Getting similar artists from db for: %s " %
                     self.artist_name)
                 cursor.execute(
-                    "SELECT name, match  FROM artist_2_artist INNER JOIN artists ON artist_2_artist.artist2 = artists.id WHERE artist_2_artist.artist1 = %s",
-                    id)
+                    "SELECT name, match  FROM artist_2_artist INNER JOIN artists ON artist_2_artist.artist2 = artists.id WHERE artist_2_artist.artist1 = ?",
+                    (id,))
                 return cursor.fetchall() + reverse_lookup
         similar_artists = self.get_similar_artists()
         self._update_similar_artists(id, similar_artists)
@@ -598,10 +613,10 @@ class AutoQueue(EventPlugin):
             return self.get_similar_tracks()
         track = self.get_track(self.artist_name, self.title)
         id, updated = track[0], track[3]
-        cursor = self.cursor
+        cursor = self.connection.cursor()
         cursor.execute(
-            "SELECT artists.name, tracks.title, track_2_track.match  FROM track_2_track INNER JOIN tracks ON track_2_track.track1 = tracks.id INNER JOIN artists ON artists.id = tracks.artist WHERE track_2_track.track2 = %s",
-            id)
+            "SELECT artists.name, tracks.title, track_2_track.match  FROM track_2_track INNER JOIN tracks ON track_2_track.track1 = tracks.id INNER JOIN artists ON artists.id = tracks.artist WHERE track_2_track.track2 = ?",
+            (id,))
         reverse_lookup = cursor.fetchall()
         if updated:
             updated = datetime(*strptime(updated, "%Y-%m-%d %H:%M:%S")[0:6])
@@ -609,61 +624,71 @@ class AutoQueue(EventPlugin):
                 log("Getting similar tracks from db for: %s - %s" % (
                     self.artist_name, self.title))
                 cursor.execute(
-                    "SELECT artists.name, tracks.title, track_2_track.match  FROM track_2_track INNER JOIN tracks ON track_2_track.track2 = tracks.id INNER JOIN artists ON artists.id = tracks.artist WHERE track_2_track.track1 = %s",
-                    id)
+                    "SELECT artists.name, tracks.title, track_2_track.match  FROM track_2_track INNER JOIN tracks ON track_2_track.track2 = tracks.id INNER JOIN artists ON artists.id = tracks.artist WHERE track_2_track.track1 = ?",
+                    (id,))
                 return cursor.fetchall() + reverse_lookup
         similar_tracks = self.get_similar_tracks()
         self._update_similar_tracks(id, similar_tracks)
         return similar_tracks + reverse_lookup
 
+    @cache
     def _get_artist_match(self, a1, a2):
-        self.cursor.execute(
-            "SELECT match FROM artist_2_artist WHERE artist1 = %s AND artist2 = %s",
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT match FROM artist_2_artist WHERE artist1 = ? AND artist2 = ?",
             (a1, a2))
-        row = self.cursor.fetchone()
+        row = cursor.fetchone()
         if not row: return 0
         return row[0]
 
+    @cache
     def _get_track_match(self, t1, t2):
-        self.cursor.execute(
-            "SELECT match FROM track_2_track WHERE track1 = %s AND track2 = %s",
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT match FROM track_2_track WHERE track1 = ? AND track2 = ?",
             (t1, t2))
-        row = self.cursor.fetchone()
+        row = cursor.fetchone()
         if not row: return 0
         return row[0]
 
     def _update_artist_match(self, a1, a2, match):
-        self.cursor.execute(
-            "UPDATE artist_2_artist SET match = %s WHERE artist1 = %s AND artist2 = %s",
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "UPDATE artist_2_artist SET match = ? WHERE artist1 = ? AND artist2 = ?",
             (match, a1, a2))
         self.connection.commit()
 
     def _update_track_match(self, t1, t2, match):
-        self.cursor.execute(
-            "UPDATE track_2_track SET match = %s WHERE track1 = %s AND track2 = %s",
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "UPDATE track_2_track SET match = ? WHERE track1 = ? AND track2 = ?",
             (match, t1, t2))
         self.connection.commit()
 
     def _insert_artist_match(self, a1, a2, match):
-        self.cursor.execute(
-            "INSERT INTO artist_2_artist (artist1, artist2, match) VALUES (%s, %s, %s)",
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "INSERT INTO artist_2_artist (artist1, artist2, match) VALUES (?, ?, ?)",
             (a1, a2, match))
         self.connection.commit()
 
     def _insert_track_match(self, t1, t2, match):
-        self.cursor.execute(
-            "INSERT INTO track_2_track (track1, track2, match) VALUES (%s, %s, %s)",
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "INSERT INTO track_2_track (track1, track2, match) VALUES (?, ?, ?)",
             (t1, t2, match))
         self.connection.commit()
 
     def _update_artist(self, id):
-        self.cursor.execute(
-            "UPDATE artists SET updated = DATETIME('now') WHERE id = %s", id)
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "UPDATE artists SET updated = DATETIME('now') WHERE id = ?", (id,))
         self.connection.commit()
 
     def _update_track(self, id):
-        self.cursor.execute(
-            "UPDATE tracks SET updated = DATETIME('now') WHERE id = %s", id)
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "UPDATE tracks SET updated = DATETIME('now') WHERE id = ?", (id,))
         self.connection.commit()
         
     def _update_similar_artists(self, id, similar_artists):
