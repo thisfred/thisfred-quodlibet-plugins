@@ -62,8 +62,6 @@ def cache(f):
     values = {}  
     def cached(*args):  
         if values.has_key(args):  
-            ## log("found cached: %s(%s): %s" % (
-            ##     repr(f), repr(args), repr(values[args])))
             return values[args]  
         else:  
             r = f(*args)  
@@ -474,14 +472,14 @@ class AutoQueue(EventPlugin):
             else:
                 match += self.get_artist_match(artist_name, q_artist_name)
         return match
-    
+
     def get_track_match(self, a1, t1, a2, t2):
         id1 = self.get_track(a1,t1)[0]
         id2 = self.get_track(a2,t2)[0]
         return max(
             self._get_track_match(id1, id2),
             self._get_track_match(id2, id1))
-        
+
     def get_artist_match(self, a1, a2):
         id1 = self.get_artist(a1)[0]
         id2 = self.get_artist(a2)[0]
