@@ -83,7 +83,8 @@ class AutoQueue(EventPlugin):
         pickle = open(self.DUMP, 'r')
         try:
             unpickler = Unpickler(pickle)
-            self._blocked_artists, self._blocked_artists_times = unpickler.load()
+            self._blocked_artists, self._blocked_artists_times \
+                = unpickler.load()
         except:
             pass
         finally:
@@ -127,13 +128,17 @@ class AutoQueue(EventPlugin):
         connection = sqlite3.connect(self.DB)
         cursor = connection.cursor()
         cursor.execute(
-            'CREATE TABLE artists (id INTEGER PRIMARY KEY, name VARCHAR(100), updated DATE)')
+            'CREATE TABLE artists (id INTEGER PRIMARY KEY, name'
+            ' VARCHAR(100), updated DATE)')
         cursor.execute(
-            'CREATE TABLE artist_2_artist (artist1 INTEGER, artist2 INTEGER, match INTEGER)')
+            'CREATE TABLE artist_2_artist (artist1 INTEGER, artist2 INTEGER,'
+            ' match INTEGER)')
         cursor.execute(
-            'CREATE TABLE tracks (id INTEGER PRIMARY KEY, artist INTEGER, title VARCHAR(100), updated DATE)')
+            'CREATE TABLE tracks (id INTEGER PRIMARY KEY, artist INTEGER,'
+            ' title VARCHAR(100), updated DATE)')
         cursor.execute(
-            'CREATE TABLE track_2_track (track1 INTEGER, track2 INTEGER, match INTEGER)')
+            'CREATE TABLE track_2_track (track1 INTEGER, track2 INTEGER,'
+            ' match INTEGER)')
         connection.commit()
         
     def dump_stuff(self):
@@ -257,7 +262,8 @@ class AutoQueue(EventPlugin):
                     search = ''
                     search_tags = []
                     for tag in tags:
-                        if tag.startswith("artist:") or tag.startswith("album:"):
+                        if tag.startswith("artist:") or tag.startswith(
+                            "album:"):
                             stripped = ":".join(tag.split(":")[1:])
                         else:
                             stripped = tag
@@ -271,7 +277,8 @@ class AutoQueue(EventPlugin):
                         "#(laststarted > %s days)" % self.track_block_time)
                     self.pick_and_queue(search, by="tag")
                     if len(main.playlist.q) > queue_length:
-                        self.still_to_add -= len(main.playlist.q) - queue_length
+                        self.still_to_add -= len(
+                            main.playlist.q) - queue_length
                         log("Tracks added by tag.")
             if self.still_to_add:
                 self.queued = 0
@@ -461,7 +468,8 @@ class AutoQueue(EventPlugin):
                 match += self.get_track_match(
                     artist_name, title, q_artist_name, q_title)
             elif by == "tag":
-                match += self.get_tag_match(song.list("tag"), q_song.list("tag"))
+                match += self.get_tag_match(
+                    song.list("tag"), q_song.list("tag"))
             else:
                 match += self.get_artist_match(artist_name, q_artist_name)
         return match
@@ -492,7 +500,9 @@ class AutoQueue(EventPlugin):
             artist_name, title))
         enc_artist_name= artist_name.encode("utf-8")
         enc_title = title.encode("utf-8")
-        if "&" in artist_name or "/" in artist_name or "?" in artist_name or "#" in artist_name or "&" in title or "/" in title or "?" in title or "#" in title:
+        if ("&" in artist_name or "/" in artist_name or "?" in artist_name
+            or "#" in artist_name or "&" in title or "/" in title
+            or "?" in title or "#" in title):
             enc_artist_name = urllib.quote_plus(enc_artist_name)
             enc_title = urllib.quote_plus(enc_title)
         url = TRACK_URL % (
@@ -516,7 +526,8 @@ class AutoQueue(EventPlugin):
                     similar_title = child.firstChild.nodeValue.lower()
                 elif child.nodeName == 'match':
                     match = int(float(child.firstChild.nodeValue) * 100)
-                if similar_artist != '' and similar_title != '' and match is not None:
+                if (similar_artist != '' and similar_title != ''
+                    and match is not None):
                     break
             tracks.append((similar_artist, similar_title, match))
         return tracks
@@ -524,7 +535,8 @@ class AutoQueue(EventPlugin):
     def get_similar_artists(self):
         artist_name = self.artist_name
         log("Getting similar artists from last.fm for: %s " % artist_name)
-        if "&" in artist_name or "/" in artist_name or "?" in artist_name or "#" in artist_name:
+        if ("&" in artist_name or "/" in artist_name or "?" in artist_name
+            or "#" in artist_name):
             artist_name = urllib.quote_plus(artist_name)
         url = ARTIST_URL % (
             urllib.quote(artist_name.encode("utf-8")))
@@ -580,7 +592,9 @@ class AutoQueue(EventPlugin):
         id, updated = artist[0], artist[2]
         cursor = self.connection.cursor()
         cursor.execute(
-            "SELECT name, match  FROM artist_2_artist INNER JOIN artists ON artist_2_artist.artist1 = artists.id WHERE artist_2_artist.artist2 = ?",
+            "SELECT name, match  FROM artist_2_artist INNER JOIN artists"
+            " ON artist_2_artist.artist1 = artists.id WHERE"
+            " artist_2_artist.artist2 = ?",
             (id,))
         reverse_lookup = cursor.fetchall()
         if updated:
@@ -590,7 +604,9 @@ class AutoQueue(EventPlugin):
                     "Getting similar artists from db for: %s " %
                     self.artist_name)
                 cursor.execute(
-                    "SELECT name, match  FROM artist_2_artist INNER JOIN artists ON artist_2_artist.artist2 = artists.id WHERE artist_2_artist.artist1 = ?",
+                    "SELECT name, match  FROM artist_2_artist INNER JOIN"
+                    " artists ON artist_2_artist.artist2 = artists.id WHERE"
+                    " artist_2_artist.artist1 = ?",
                     (id,))
                 return cursor.fetchall() + reverse_lookup
         similar_artists = self.get_similar_artists()
@@ -604,7 +620,10 @@ class AutoQueue(EventPlugin):
         id, updated = track[0], track[3]
         cursor = self.connection.cursor()
         cursor.execute(
-            "SELECT artists.name, tracks.title, track_2_track.match  FROM track_2_track INNER JOIN tracks ON track_2_track.track1 = tracks.id INNER JOIN artists ON artists.id = tracks.artist WHERE track_2_track.track2 = ?",
+            "SELECT artists.name, tracks.title, track_2_track.match FROM"
+            " track_2_track INNER JOIN tracks ON track_2_track.track1"
+            " = tracks.id INNER JOIN artists ON artists.id = tracks.artist"
+            " WHERE track_2_track.track2 = ?",
             (id,))
         reverse_lookup = cursor.fetchall()
         if updated:
@@ -613,7 +632,11 @@ class AutoQueue(EventPlugin):
                 log("Getting similar tracks from db for: %s - %s" % (
                     self.artist_name, self.title))
                 cursor.execute(
-                    "SELECT artists.name, tracks.title, track_2_track.match  FROM track_2_track INNER JOIN tracks ON track_2_track.track2 = tracks.id INNER JOIN artists ON artists.id = tracks.artist WHERE track_2_track.track1 = ?",
+                    "SELECT artists.name, tracks.title, track_2_track.match"
+                    " FROM track_2_track INNER JOIN tracks ON"
+                    " track_2_track.track2 = tracks.id INNER JOIN artists ON"
+                    " artists.id = tracks.artist WHERE track_2_track.track1"
+                    " = ?",
                     (id,))
                 return cursor.fetchall() + reverse_lookup
         similar_tracks = self.get_similar_tracks()
@@ -623,7 +646,8 @@ class AutoQueue(EventPlugin):
     def _get_artist_match(self, a1, a2):
         cursor = self.connection.cursor()
         cursor.execute(
-            "SELECT match FROM artist_2_artist WHERE artist1 = ? AND artist2 = ?",
+            "SELECT match FROM artist_2_artist WHERE artist1 = ?"
+            " AND artist2 = ?",
             (a1, a2))
         row = cursor.fetchone()
         if not row: return 0
@@ -641,28 +665,32 @@ class AutoQueue(EventPlugin):
     def _update_artist_match(self, a1, a2, match):
         cursor = self.connection.cursor()
         cursor.execute(
-            "UPDATE artist_2_artist SET match = ? WHERE artist1 = ? AND artist2 = ?",
+            "UPDATE artist_2_artist SET match = ? WHERE artist1 = ? AND"
+            " artist2 = ?",
             (match, a1, a2))
         self.connection.commit()
 
     def _update_track_match(self, t1, t2, match):
         cursor = self.connection.cursor()
         cursor.execute(
-            "UPDATE track_2_track SET match = ? WHERE track1 = ? AND track2 = ?",
+            "UPDATE track_2_track SET match = ? WHERE track1 = ? AND"
+            " track2 = ?",
             (match, t1, t2))
         self.connection.commit()
 
     def _insert_artist_match(self, a1, a2, match):
         cursor = self.connection.cursor()
         cursor.execute(
-            "INSERT INTO artist_2_artist (artist1, artist2, match) VALUES (?, ?, ?)",
+            "INSERT INTO artist_2_artist (artist1, artist2, match) VALUES"
+            " (?, ?, ?)",
             (a1, a2, match))
         self.connection.commit()
 
     def _insert_track_match(self, t1, t2, match):
         cursor = self.connection.cursor()
         cursor.execute(
-            "INSERT INTO track_2_track (track1, track2, match) VALUES (?, ?, ?)",
+            "INSERT INTO track_2_track (track1, track2, match) VALUES"
+            " (?, ?, ?)",
             (t1, t2, match))
         self.connection.commit()
 
