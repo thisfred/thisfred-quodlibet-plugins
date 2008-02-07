@@ -327,26 +327,28 @@ class AutoQueue(EventPlugin):
             song.comma("artist").lower() for song in main.playlist.q.get()]
 
     def reorder_queue(self):
-        if not len(main.playlist.q) > 1: return
-        queue_songs = main.playlist.q.get()[:]
+        if not len(main.playlist.q) > 1:
+            return
+        new_order = old_order = main.playlist.q.get()[:]
         if self.by_tags:
-            queue_songs = self._reorder_queue_helper(
-                self.songs[0], queue_songs, by="tag")
+            new_order = self._reorder_queue_helper(
+                self.songs[-1], new_order, by="tag")
         if self.by_artists:
-            queue_songs = self._reorder_queue_helper(
-                self.songs[0], queue_songs, by="artist")
+            new_order = self._reorder_queue_helper(
+                self.songs[-1], new_order, by="artist")
         if self.by_tracks:
-            queue_songs = self._reorder_queue_helper(
-                self.songs[0], queue_songs, by="track")
-        #XXX refactor
-        self.queue(queue_songs)
+            new_order = self._reorder_queue_helper(
+                self.songs[-1], new_order, by="track")
+        if new_order == old_order:
+            return
+        self.queue(new_order)
         
     def queue(self, songs):
         main.playlist.q.clear()
-        log("process_queue([%s])" % len(songs))
-        songs = filter(lambda s: s.can_add, songs)
         log("queuing songs: [%s]" % len(songs))
-        main.playlist.enqueue(songs)
+        main.playlist.enqueue(
+            [song for song in songs if not
+             self.is_blocked(song.comma("artist").lower())])
                 
     def _reorder_queue_helper(self, song, songs, by="track"):
         tw, weighted_songs = self.get_weights([song], songs, by=by)
