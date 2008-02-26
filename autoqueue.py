@@ -109,11 +109,12 @@ class AutoQueue(EventPlugin):
                 config.set("plugins", "autoqueue_%s" % key, value)
         for key, value in BOOL_SETTINGS.items():
             try:
-                setattr(self, key, config.getboolean(
-                    "plugins", "autoqueue_%s" % key))
+                setattr(self, key, config.get(
+                    "plugins", "autoqueue_%s" % key).lower == 'true')
             except:
                 setattr(self, key, value)
-                config.set("plugins", "autoqueue_%s" % key, value)
+                config.set("plugins", "autoqueue_%s" %
+                           key, value and 'true' or 'false')
         for key, value in STR_SETTINGS.items():
             try:
                 setattr(self, key, config.get("plugins", "autoqueue_%s" % key))
@@ -122,7 +123,6 @@ class AutoQueue(EventPlugin):
                 config.set("plugins", "autoqueue_%s" % key, value)
                 
     def create_db(self):
-        log("create_db")
         """ Set up a database for the artist and track similarity scores
         """
         connection = sqlite3.connect(self.DB)
@@ -771,7 +771,8 @@ class AutoQueue(EventPlugin):
             button = gtk.CheckButton(label=status)
             button.set_name(status)
             button.set_active(
-                config.getboolean("plugins", "autoqueue_%s" % status))
+                config.get(
+                "plugins", "autoqueue_%s" % status).lower() == 'true')
             button.connect('toggled', self.bool_changed)
             self.list.append(button)
             table.attach(button, i, i+1, j, j+1)
