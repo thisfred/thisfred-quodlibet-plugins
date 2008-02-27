@@ -110,7 +110,7 @@ class AutoQueue(EventPlugin):
         for key, value in BOOL_SETTINGS.items():
             try:
                 setattr(self, key, config.get(
-                    "plugins", "autoqueue_%s" % key).lower == 'true')
+                    "plugins", "autoqueue_%s" % key).lower() == 'true')
             except:
                 setattr(self, key, value)
                 config.set("plugins", "autoqueue_%s" %
