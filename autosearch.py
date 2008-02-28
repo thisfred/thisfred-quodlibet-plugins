@@ -18,8 +18,8 @@ class AutoRating(EventPlugin):
 
     def plugin_on_song_started(self, song):
         if song is not None and len(main.playlist.q) > 0:
-            artist = song.comma("artist").lower()
-            main.browser.set_text(artist)
+            title = song.comma("title").lower()
+            main.browser.set_text(title)
         else:
             main.browser.set_text("")
         main.browser.activate()
