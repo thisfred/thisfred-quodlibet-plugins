@@ -398,7 +398,7 @@ class AutoQueue(EventPlugin):
 
     def get_weighted_sample(
         self, songs, n, by="track", queue_similarity=True):
-        by_songs = [self.songs[0]]
+        by_songs = [self.songs[-1]]
         if queue_similarity:
             by_songs.extend(main.playlist.q.get())
         total_weight, weighted_songs = self.get_weights(
@@ -424,7 +424,7 @@ class AutoQueue(EventPlugin):
         return adds
         
     def get_best_sample(self, songs, n, by="track", queue_similarity=True):
-        by_songs = [self.songs[0]]
+        by_songs = [self.songs[-1]]
         if queue_similarity:
             by_songs.extend(main.playlist.q.get())
         weighted_songs = self.get_weights(by_songs, songs, by=by)[1]

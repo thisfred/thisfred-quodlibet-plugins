@@ -21,7 +21,7 @@ class AutoRating(EventPlugin):
             title = song.comma("title").lower()
             main.browser.set_text(title)
         else:
-            main.browser.set_text("")
+            main.browser.set_text("&(#(skipcount < 1), #(playcount < 1))")
         main.browser.activate()
             
             
