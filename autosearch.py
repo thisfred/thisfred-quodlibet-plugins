@@ -22,6 +22,10 @@ class AutoRating(EventPlugin):
             title = song.comma("title").lower()
             main.browser.set_text(title)
         else:
+            if (main.browser.status ==
+                "&(#(skipcount < 1), #(playcount < 1))"):
+                print "[autosearch:] *new* already set"
+                return
             main.browser.set_text("&(#(skipcount < 1), #(playcount < 1))")
         main.browser.activate()
             
