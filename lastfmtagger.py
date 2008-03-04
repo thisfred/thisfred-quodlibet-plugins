@@ -239,7 +239,6 @@ class LastFMTagger(EventPlugin):
         try:
             song[self.tag] = '\n'.join(tags)
             log("saved tags")
-            library.changed([song])
         except:
             pass
 

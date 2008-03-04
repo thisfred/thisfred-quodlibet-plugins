@@ -123,6 +123,7 @@ class AutoQueue(EventPlugin):
                 config.set("plugins", "autoqueue_%s" % key, value)
                 
     def create_db(self):
+        log("create_db")
         """ Set up a database for the artist and track similarity scores
         """
         connection = sqlite3.connect(self.DB)
@@ -188,7 +189,7 @@ class AutoQueue(EventPlugin):
         self.blocked = True
         self.connection = sqlite3.connect(self.DB)
         if self.desired_queue_length >= 0 and len(
-            main.playlist.q) > self.desired_queue_length:
+            main.playlist.q) >= self.desired_queue_length:
             if not self.reorder:
                 self.blocked = False
                 return
@@ -344,12 +345,14 @@ class AutoQueue(EventPlugin):
         self.queue(new_order)
         
     def queue(self, songs):
+        gtk.gdk.threads_enter()
         main.playlist.q.clear()
         log("queuing songs: [%s]" % len(songs))
         main.playlist.enqueue(
             [song for song in songs if not
              self.is_blocked(song.comma("artist").lower())])
-                
+        gtk.gdk.threads_leave()
+        
     def _reorder_queue_helper(self, song, songs, by="track"):
         tw, weighted_songs = self.get_weights([song], songs, by=by)
         if tw == 0:
@@ -398,7 +401,7 @@ class AutoQueue(EventPlugin):
 
     def get_weighted_sample(
         self, songs, n, by="track", queue_similarity=True):
-        by_songs = [self.songs[-1]]
+        by_songs = [self.songs[0]]
         if queue_similarity:
             by_songs.extend(main.playlist.q.get())
         total_weight, weighted_songs = self.get_weights(
@@ -424,7 +427,7 @@ class AutoQueue(EventPlugin):
         return adds
         
     def get_best_sample(self, songs, n, by="track", queue_similarity=True):
-        by_songs = [self.songs[-1]]
+        by_songs = [self.songs[0]]
         if queue_similarity:
             by_songs.extend(main.playlist.q.get())
         weighted_songs = self.get_weights(by_songs, songs, by=by)[1]

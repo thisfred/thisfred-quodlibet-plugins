@@ -6,6 +6,7 @@
 #
 # $Id: autorating.py 3819 2006-09-04 03:28:14Z piman $
 
+import gtk
 from plugins.events import EventPlugin
 from widgets import main
 
