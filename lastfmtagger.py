@@ -6,15 +6,15 @@
 # Licensed under GPLv2. See Quod Libet's COPYING for more information.
 
 import random
-import md5, urllib, time, threading, os
+import md5, urllib, time, os
 import player, config, const, widgets, parse
 import gobject, gtk, xmlrpclib, socket
-from sets import Set
 from time import time
 from xml.dom import minidom
 from random import randint
 from qltk.entry import ValidatingEntry
 from library import library
+from quodlibet.util import copool
 
 def to(string): print string.encode("ascii", "replace")
 
@@ -60,15 +60,11 @@ class LastFMTagger(EventPlugin):
     
     def plugin_on_song_started(self, song):
         if song is None: return
-        bg = threading.Thread(None, self.sync_tags, args=(song,'down'))
-        bg.setDaemon(True)
-        bg.start()
+        copool.add(self.sync_tags, song, 'down')
 
     def plugin_on_song_ended(self, song, skipped):
         if song is None: return
-        bg = threading.Thread(None, self.sync_tags, args=(song,'up'))
-        bg.setDaemon(True)
-        bg.start()
+        copool.add(self.sync_tags, song, 'up')
         
     def read_config(self):
         username = ""
@@ -116,7 +112,7 @@ class LastFMTagger(EventPlugin):
         from the audioscrobbler web service.
         """
         log("get lastfm tags")
-        tags = Set()
+        tags = set()
         if artist and title:
             url = self.TRACK_TAG_URL % (self.username, artist, title)
             tags |= self.get_lastfm_tags_from_url(url)
@@ -133,7 +129,7 @@ class LastFMTagger(EventPlugin):
         aren't already in the cache.
         """
         log("get tags from url: %s " % url)
-        tags = Set()
+        tags = set()
         cached_tags = self.lastfm_cache.get(url, None)
         if not cached_tags is None:
             return cached_tags
@@ -185,8 +181,8 @@ class LastFMTagger(EventPlugin):
 
     def get_tags_for(self, tags, for_=""):
         if for_:
-            return Set(tag for tag in tags if tag.startswith('%s:' % for_))
-        return Set(tag for tag in tags if not (
+            return set(tag for tag in tags if tag.startswith('%s:' % for_))
+        return set(tag for tag in tags if not (
             tag.startswith('album:') or tag.startswith('artist:')))
         
     def submit_artist_tags(self, song, tags):
@@ -211,7 +207,7 @@ class LastFMTagger(EventPlugin):
 
     def submit_album_tags(self, song, tags):
         log("submitting album tags: %s " % ', '.join(tags))
-        album_tags = Set(tag for tag in tags if tag.startswith('album:'))
+        album_tags = set(tag for tag in tags if tag.startswith('album:'))
         if not album_tags: return album_tags
         random_string, md5hash = self.get_timestamp()
         server = xmlrpclib.ServerProxy(
@@ -236,12 +232,14 @@ class LastFMTagger(EventPlugin):
 
     def save_tags(self, song, tags):
         log("saving tags: %s" % ', '.join(tags))
+        gtk.gdk.threads_enter()
         try:
             song[self.tag] = '\n'.join(tags)
             log("saved tags")
         except:
             pass
-
+        finally:
+            gtk.gdk.threads_leave()
 
     def submit_tags(self, song, artist, album, title, all_tags, lastfm_tags):
         log("submitting tags: %s" % ', '.join(all_tags))
@@ -284,11 +282,11 @@ class LastFMTagger(EventPlugin):
                 " (%s)" % song.comma("version").encode("utf-8"))
         artist = urllib.quote(song.comma("artist").encode("utf-8"))
         album =  urllib.quote(song.comma("album").encode("utf-8"))
-        ql_tags = Set()
+        ql_tags = set()
         ql_tag_comma = song.comma(self.tag)
         log("local tags: %s" % ql_tag_comma)
         if ql_tag_comma:
-            ql_tags = Set(ql_tag_comma.split(", "))
+            ql_tags = set(ql_tag_comma.split(", "))
         lastfm_tags = self.get_lastfm_tags(title, artist, album)
         if direction == 'down':
             all_tags = ql_tags | lastfm_tags
@@ -296,7 +294,9 @@ class LastFMTagger(EventPlugin):
             all_tags = ql_tags
         if direction == 'up':
             if all_tags != lastfm_tags:
-                self.submit_tags(song, artist, album, title, all_tags, lastfm_tags)
+                self.submit_tags(
+                    song, artist, album, title, all_tags, lastfm_tags)
+        yield True
         if direction == 'down':
             if all_tags > ql_tags:
                 self.save_tags(song, all_tags)
