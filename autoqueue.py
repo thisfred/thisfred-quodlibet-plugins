@@ -12,7 +12,6 @@ import urllib, threading
 import random, os
 from xml.dom import minidom
 from cPickle import Pickler, Unpickler
-from sets import Set
 
 try:
     import sqlite3
@@ -494,8 +493,8 @@ class AutoQueue(EventPlugin):
             self._get_artist_match(id2, id1))        
 
     def get_tag_match(self, tags1, tags2):
-        t1 = list(Set([tag.split(":")[-1] for tag in tags1]))
-        t2 = list(Set([tag.split(":")[-1] for tag in tags2]))
+        t1 = list(set([tag.split(":")[-1] for tag in tags1]))
+        t2 = list(set([tag.split(":")[-1] for tag in tags2]))
         return len([tag for tag in t2 if tag in t1])
         
     def get_similar_tracks(self):
