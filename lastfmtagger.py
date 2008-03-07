@@ -34,7 +34,8 @@ class LastFMTagger(EventPlugin):
     PLUGIN_DESC = "Synchronize tags between local files and last.fm"
     PLUGIN_ICON = gtk.STOCK_CONNECT
     PLUGIN_VERSION = "0.3"
-    CLIENT = "tst"
+    CLIENT = "lmt"
+    CLIENT_VERSION = "0.1"
     PROTOCOL_VERSION = "1.2"
     TRACK_TAG_URL = "http://ws.audioscrobbler.com/1.0/user/%s/tracktags.xml?artist=%s&track=%s"
     ARTIST_TAG_URL = "http://ws.audioscrobbler.com/1.0/user/%s/artisttags.xml?artist=%s"
