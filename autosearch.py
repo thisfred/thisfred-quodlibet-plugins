@@ -14,8 +14,8 @@ class AutoRating(EventPlugin):
     PLUGIN_ID = "Automatic Searching"
     PLUGIN_NAME = _("Automatic Searching")
     PLUGIN_VERSION = "0.1"
-    PLUGIN_DESC = ("Auromatically do a search for the artist of the"
-                   "song that just ended.")
+    PLUGIN_DESC = ("Auromatically do a search for the title of the"
+                   "current song. (Helps to indentify covers & doubles.)")
 
     def plugin_on_song_started(self, song):
         if song is not None and len(main.playlist.q) > 0:
