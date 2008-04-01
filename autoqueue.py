@@ -196,8 +196,8 @@ class AutoQueue(EventPlugin):
             self.blocked = False
             self.songs = []
             return
-        if self.drop_last and len(main.playlist.q) > (
-            self.desired_queue_length - self.drop_last):
+        if self.drop_last and len(main.playlist.q) > self.drop_last:
+            self.reorder_queue()
             new_q = main.playlist.q.get()[:-self.drop_last]
             self.queue(new_q)
         while self.songs:
