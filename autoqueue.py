@@ -38,7 +38,8 @@ INT_SETTINGS = {
     "track_block_time": 14,
     "desired_queue_length": -1,
     "to_add": 2,
-    "cache_time": 90,}
+    "cache_time": 90,
+    "drop_last": 2}
 
 BOOL_SETTINGS = {
     "cache": SQL and True,
@@ -195,6 +196,10 @@ class AutoQueue(EventPlugin):
             self.blocked = False
             self.songs = []
             return
+        if self.drop_last and len(main.playlist.q) > (
+            self.desired_queue_length - self.drop_last):
+            new_q = main.playlist.q.get()[:-self.drop_last]
+            self.queue(new_q)
         while self.songs:
             if self.random_skip:
                 trigger = random.random()
