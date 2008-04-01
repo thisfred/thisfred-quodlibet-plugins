@@ -34,10 +34,10 @@ ARTIST_URL = "http://ws.audioscrobbler.com/1.0/artist/%s/similar.xml"
 verbose = True
 
 INT_SETTINGS = {
-    "artist_block_time": 2,
-    "track_block_time": 14,
-    "desired_queue_length": -1,
-    "to_add": 2,
+    "artist_block_time": 7,
+    "track_block_time": 30,
+    "desired_queue_length": 5,
+    "to_add": 5,
     "cache_time": 90,
     "drop_last": 2}
 
