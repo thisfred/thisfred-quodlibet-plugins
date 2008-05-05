@@ -31,24 +31,20 @@ TRACK_URL = "http://ws.audioscrobbler.com/1.0/track/%s/%s/similar.xml"
 ARTIST_URL = "http://ws.audioscrobbler.com/1.0/artist/%s/similar.xml"
 
 # Set this to True to enable logging
-verbose = True
+verbose = False
 
 INT_SETTINGS = {
     "artist_block_time": 7,
     "track_block_time": 30,
     "desired_queue_length": 5,
-    "to_add": 5,
-    "cache_time": 90,
-    "drop_last": 2}
+    "cache_time": 90,}
 
 BOOL_SETTINGS = {
     "cache": SQL and True,
     "include_rating": True,
     "by_tracks": True,
     "by_artists": True,
-    "by_tags": True,
-    "queue_similarity": False,
-    "reorder": True,}
+    "by_tags": True,}
 
 STR_SETTINGS = {
     "pick": "best",}
@@ -77,8 +73,24 @@ class AutoQueue(EventPlugin):
     __enabled = False
     
     def __init__(self):
+        self.artist_block_time = 7
+        self.track_block_time = 30
+        self.desired_queue_length = 5
+        self.cache_time = 90
+
+        self.cache = SQL and True
+        self.include_rating = True
+        self.by_tracks = True
+        self.by_artists = True
+        self.by_tags = True
+        self.pick = "best"
+
         self.blocked = False
         self.read_config()
+        self.now = datetime.now()
+        self.connection = None
+        self.song = None
+        self._songs = []
         pickle = open(self.DUMP, 'r')
         try:
             unpickler = Unpickler(pickle)
@@ -93,7 +105,6 @@ class AutoQueue(EventPlugin):
                 os.stat(self.DB)
             except OSError:
                 self.create_db()
-        self.songs = []
         # Set up exit hook to dump cache
         gtk.quit_add(0, self.dump_stuff)
         
@@ -121,9 +132,9 @@ class AutoQueue(EventPlugin):
                 config.set("plugins", "autoqueue_%s" % key, value)
                 
     def create_db(self):
-        log("create_db")
         """ Set up a database for the artist and track similarity scores
         """
+        log("create_db")
         connection = sqlite3.connect(self.DB)
         cursor = connection.cursor()
         cursor.execute(
@@ -145,7 +156,8 @@ class AutoQueue(EventPlugin):
         """
         try:
             os.remove(self.DUMP)
-        except OSError: pass
+        except OSError:
+            pass
         if len(self._blocked_artists) == 0: return 0
         pickle = open(self.DUMP, 'w')
         try:
@@ -165,77 +177,60 @@ class AutoQueue(EventPlugin):
         self.__enabled = False
 
     def plugin_on_song_started(self, song):
-        # if another thread of this plugin is still active we do
-        # nothing, since having two threads mess with the queue
-        # results in crashes.
-        if song is None: return
+        if song is None:
+            return
         self.now = datetime.now()
-        self.added = 0
-        self.artist_name, self.title = self.get_artist_and_title(song)
-        if not self.artist_name or not self.title: return
+        artist_name, title = self.get_artist_and_title(song)
+        if not (artist_name and title):
+            return
+        self.song = song
         # add the artist to the blocked list, so their songs won't be
         # played for a determined number of days
-        self.block_artist(self.artist_name)
-        self.still_to_add = 0
-        self.songs.append(song)
-        if self.blocked: return
+        self.block_artist(artist_name)
+        if self.blocked:
+            return
         bg = threading.Thread(None, self.add_to_queue) 
         bg.setDaemon(True)
         bg.start()
+
+    def need_songs(self):
+        return len(main.playlist.q) < self.desired_queue_length
         
     def add_to_queue(self):
         self.blocked = True
         self.connection = sqlite3.connect(self.DB)
-        if self.desired_queue_length >= 0 and len(
-            main.playlist.q) >= self.desired_queue_length:
-            if not self.reorder:
-                self.blocked = False
-                return
-            self.reorder_queue()
+        if self.desired_queue_length >= 0 and not self.need_songs():
             self.blocked = False
-            self.songs = []
             return
-        if self.drop_last and len(main.playlist.q) > self.drop_last:
-            self.reorder_queue()
-            new_q = main.playlist.q.get()[:-self.drop_last]
-            self.queue(new_q)
-        while self.songs:
-            queue_length = len(main.playlist.q)
+        while self.need_songs():
             self.unblock_artists()
-            self.still_to_add = min(
-                self.to_add,
-                max(0, self.desired_queue_length - len(main.playlist.q)))
-            if self.by_tracks and self.still_to_add:
-                log("%s to add" % self.still_to_add)
+            if self.by_tracks:
                 similar_tracks = self.get_cached_similar_tracks()
                 search_tracks = []
                 search = ''
                 search_tracks = [
                     '&(artist = "%s", title = "%s")' % (artist, title)
                     for (artist, title, match) in similar_tracks
-                    if not self.is_blocked(artist)]
+                    if not self.is_blocked(artist)
+                    ]
                 version_tracks = [
                     '&(artist = "%s", title = "%s")' %
                     (artist,
                      "(".join(title.split("(")[:-1]).strip())
                     for (artist, title, match) in similar_tracks
-                    if "(" in title and not self.is_blocked(artist)]
+                    if "(" in title and not self.is_blocked(artist)
+                    ]
                 if version_tracks:
                     search_tracks += version_tracks
                 if search_tracks:
                     search = "&(|(%s),%s)" % (
                         ",".join(search_tracks),
                         "#(laststarted > %s days)" % self.track_block_time)
-                    self.pick_and_queue(search,  by="track")
-                if len(main.playlist.q) > queue_length:
-                    self.still_to_add = min(
-                        self.to_add,
-                        max(0,
-                            self.desired_queue_length - len(main.playlist.q)))
-                    queue_length = len(main.playlist.q)
-                    log("Similar track(s) added.")
-            if self.by_artists and self.still_to_add and len(self.songs) < 2:
-                log("%s to add" % self.still_to_add)
+                    if self.pick_songs(
+                        search,  by="track", similar_tracks=similar_tracks):
+                        self.sort_and_queue()
+                        continue
+            if self.by_artists and self.need_songs():
                 similar_artists = self.get_cached_similar_artists()
                 search_artists = []
                 search = ''
@@ -246,17 +241,12 @@ class AutoQueue(EventPlugin):
                     search = "&(|(%s),%s)" % (
                         ",".join(search_artists),
                         "#(laststarted > %s days)" % self.track_block_time)
-                    self.pick_and_queue(search, by="artist")
-                if len(main.playlist.q) > queue_length:
-                    self.still_to_add = min(
-                        self.to_add,
-                        max(0,
-                            self.desired_queue_length - len(main.playlist.q)))
-                    queue_length = len(main.playlist.q)
-                    log("Similar artist(s) added.")
-            if self.by_tags and self.still_to_add and len(self.songs) < 2:
-                log("%s to add" % self.still_to_add)
-                tags = self.songs[0].list("tag")
+                    if self.pick_songs(
+                        search, by="artist", similar_artists=similar_artists):
+                        self.sort_and_queue()
+                        continue
+            if self.by_tags and self.need_songs():
+                tags = self.get_last_song().list("tag")
                 exclude_artists = "&(%s)" % ",".join([
                     '!artist = "%s"' %
                     artist for artist in self.get_blocked_artists()])
@@ -278,19 +268,17 @@ class AutoQueue(EventPlugin):
                         ",".join(search_tags),
                         exclude_artists,
                         "#(laststarted > %s days)" % self.track_block_time)
-                    self.pick_and_queue(search, by="tag")
-                    if len(main.playlist.q) > queue_length:
-                        self.still_to_add = min(
-                            self.to_add,
-                            max(0,
-                                self.desired_queue_length
-                                - len(main.playlist.q)))
-                    queue_length = len(main.playlist.q)
-            if self.reorder:
-                self.reorder_queue()
-            self.songs.pop(0)
+                    if self.pick_songs(search, by="tag"):
+                        self.sort_and_queue()
+                        continue
+            if self._songs:
+                self.sort_and_queue()
         self.blocked = False
-            
+
+    def sort_and_queue(self):
+        self.reorder_songs()
+        self.enqueue(self._songs.pop(0))
+        
     def block_artist(self, artist_name):
         # store artist name and current daytime so songs by that
         # artist can be blocked
@@ -301,11 +289,13 @@ class AutoQueue(EventPlugin):
             len(self._blocked_artists)))
         try:
             os.remove(self.DUMP)
-        except OSError: pass
-        if len(self._blocked_artists) == 0: return
-        # XXX: once the plugin is stable, remove this, but while there
-        # are crashes I like to preserve persistent data as often as
-        # possible
+        except OSError:
+            pass
+        if len(self._blocked_artists) == 0:
+            return
+        # XXX: once the plugin is stable, maybe remove this, but while
+        # there are crashes I like to preserve persistent data as
+        # often as possible
         pickler = Pickler(open(self.DUMP, 'w'), -1)
         to_dump = (self._blocked_artists,
                    self._blocked_artists_times)
@@ -330,30 +320,34 @@ class AutoQueue(EventPlugin):
         return self._blocked_artists + [
             song.comma("artist").lower() for song in main.playlist.q.get()]
 
-    def reorder_queue(self):
-        if not len(main.playlist.q) > 1:
+    def get_last_song(self):
+        if len(main.playlist.q):
+            return main.playlist.q.get()[-1]
+        return self.song
+
+    def reorder_songs(self):
+        if not len(self._songs) > 1:
             return
-        new_order = old_order = main.playlist.q.get()[:]
+        by_song = self.get_last_song()
+        new_order = old_order = self._songs[:]
         if self.by_tags:
             new_order = self._reorder_queue_helper(
-                self.songs[-1], new_order, by="tag")
+                by_song, new_order, by="tag")
         if self.by_artists:
             new_order = self._reorder_queue_helper(
-                self.songs[-1], new_order, by="artist")
+                by_song, new_order, by="artist")
         if self.by_tracks:
             new_order = self._reorder_queue_helper(
-                self.songs[-1], new_order, by="track")
+                by_song, new_order, by="track")
         if new_order == old_order:
             return
-        self.queue(new_order)
+        self._songs = new_order
         
-    def queue(self, songs):
+    def enqueue(self, song):
         gtk.gdk.threads_enter()
-        main.playlist.q.clear()
-        log("queuing songs: [%s]" % len(songs))
-        main.playlist.enqueue(
-            [song for song in songs if not
-             self.is_blocked(song.comma("artist").lower())])
+        log("queuing song")
+        if not self.is_blocked(song.comma("artist").lower()):
+            main.playlist.enqueue([song])
         gtk.gdk.threads_leave()
         
     def _reorder_queue_helper(self, song, songs, by="track"):
@@ -368,23 +362,25 @@ class AutoQueue(EventPlugin):
             for score, i, song in weighted_songs])))
         return [w_song[2] for w_song in weighted_songs]
             
-    def pick_and_queue(self, search, by="track"):
+    def pick_songs(
+        self, search, by="track", similar_tracks=None, similar_artists=None):
         try:
             myfilter = Query(search).search
             songs = filter(myfilter, library.itervalues())
-        except (Query.error, RuntimeError): return
+        except (Query.error, RuntimeError):
+            return False
         log("%s songs found" % len(songs))
-        n = min(self.still_to_add, len(songs))
         if self.pick =="random":
-            queue_songs = self.get_random_sample(songs, n)
+            queue_songs = self.get_random_sample(
+                songs, self.desired_queue_length)
         elif self.pick == "weighted":
             queue_songs = self.get_weighted_sample(
-                songs, n, by=by, queue_similarity=self.queue_similarity)
+                songs, self.desired_queue_length, by=by)
         else:
             queue_songs = self.get_best_sample(
-                songs, n, by=by, queue_similarity=self.queue_similarity)
-        queue_songs = main.playlist.q.get()[:] + queue_songs
-        self.queue(queue_songs)
+                songs, self.desired_queue_length, by=by)
+        self._songs = queue_songs
+        return True
         
     def get_random_sample(self, songs, n):
         adds = []
@@ -398,12 +394,11 @@ class AutoQueue(EventPlugin):
                     continue
                 n -= 1
                 adds.append(song)
-                self.added += 1
         return adds
 
     def get_weighted_sample(
         self, songs, n, by="track", queue_similarity=True):
-        by_songs = [self.songs[-1]]
+        by_songs = [self.get_last_song()]
         if queue_similarity:
             by_songs.extend(main.playlist.q.get())
         total_weight, weighted_songs = self.get_weights(
@@ -424,13 +419,10 @@ class AutoQueue(EventPlugin):
                 continue
             n -= 1
             adds.append(song)
-            self.added += 1
         return adds
         
-    def get_best_sample(self, songs, n, by="track", queue_similarity=True):
-        by_songs = [self.songs[-1]]
-        if queue_similarity:
-            by_songs.extend(main.playlist.q.get())
+    def get_best_sample(self, songs, n, by="track"):
+        by_songs = [self.get_last_song()]
         weighted_songs = self.get_weights(by_songs, songs, by=by)[1]
         weighted_songs.sort()
         adds = []
@@ -442,7 +434,6 @@ class AutoQueue(EventPlugin):
                 continue
             n -= 1
             adds.append(song)
-            self.added += 1
         return adds
     
     def get_weights(self, by_songs, for_songs, by="track"):
@@ -499,8 +490,7 @@ class AutoQueue(EventPlugin):
         return len([tag for tag in t2 if tag in t1])
         
     def get_similar_tracks(self):
-        artist_name = self.artist_name
-        title = self.title
+        artist_name, title = self.get_artist_and_title(self.get_last_song())
         log("Getting similar tracks from last.fm for: %s - %s" % (
             artist_name, title))
         enc_artist_name= artist_name.encode("utf-8")
@@ -538,7 +528,7 @@ class AutoQueue(EventPlugin):
         return tracks
             
     def get_similar_artists(self):
-        artist_name = self.artist_name
+        artist_name = self.get_artist_and_title(self.get_last_song())[0]
         log("Getting similar artists from last.fm for: %s " % artist_name)
         if ("&" in artist_name or "/" in artist_name or "?" in artist_name
             or "#" in artist_name):
@@ -593,7 +583,7 @@ class AutoQueue(EventPlugin):
     def get_cached_similar_artists(self):
         if not self.cache:
             return self.get_similar_artists()
-        artist = self.get_artist(self.artist_name)
+        artist = self.get_artist(self.get_last_song().comma("artist").lower())
         id, updated = artist[0], artist[2]
         cursor = self.connection.cursor()
         cursor.execute(
@@ -605,9 +595,10 @@ class AutoQueue(EventPlugin):
         if updated:
             updated = datetime(*strptime(updated, "%Y-%m-%d %H:%M:%S")[0:6])
             if updated + timedelta(self.cache_time) > self.now:
+                artist_name = self.get_artist_and_title(self.get_last_song())[0]
                 log(
                     "Getting similar artists from db for: %s " %
-                    self.artist_name)
+                    artist_name)
                 cursor.execute(
                     "SELECT name, match  FROM artist_2_artist INNER JOIN"
                     " artists ON artist_2_artist.artist2 = artists.id WHERE"
@@ -621,7 +612,8 @@ class AutoQueue(EventPlugin):
     def get_cached_similar_tracks(self):
         if not self.cache:
             return self.get_similar_tracks()
-        track = self.get_track(self.artist_name, self.title)
+        artist, title = self.get_artist_and_title(self.get_last_song())
+        track = self.get_track(artist, title)
         id, updated = track[0], track[3]
         cursor = self.connection.cursor()
         cursor.execute(
@@ -635,7 +627,7 @@ class AutoQueue(EventPlugin):
             updated = datetime(*strptime(updated, "%Y-%m-%d %H:%M:%S")[0:6])
             if updated + timedelta(self.cache_time) > self.now:
                 log("Getting similar tracks from db for: %s - %s" % (
-                    self.artist_name, self.title))
+                    artist, title))
                 cursor.execute(
                     "SELECT artists.name, tracks.title, track_2_track.match"
                     " FROM track_2_track INNER JOIN tracks ON"
