@@ -31,7 +31,7 @@ TRACK_URL = "http://ws.audioscrobbler.com/1.0/track/%s/%s/similar.xml"
 ARTIST_URL = "http://ws.audioscrobbler.com/1.0/artist/%s/similar.xml"
 
 # Set this to True to enable logging
-verbose = False
+verbose = True
 
 INT_SETTINGS = {
     "artist_block_time": 7,
@@ -276,8 +276,9 @@ class AutoQueue(EventPlugin):
         self.blocked = False
 
     def sort_and_queue(self):
-        self.reorder_songs()
-        self.enqueue(self._songs.pop(0))
+        if self._songs:
+            self.reorder_songs()
+            self.enqueue(self._songs.pop(0))
         
     def block_artist(self, artist_name):
         # store artist name and current daytime so songs by that
@@ -370,6 +371,8 @@ class AutoQueue(EventPlugin):
         except (Query.error, RuntimeError):
             return False
         log("%s songs found" % len(songs))
+        if not songs:
+            return False
         if self.pick =="random":
             queue_songs = self.get_random_sample(
                 songs, self.desired_queue_length)
