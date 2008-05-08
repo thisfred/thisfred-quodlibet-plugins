@@ -356,7 +356,7 @@ class AutoQueue(EventPlugin):
         gtk.gdk.threads_leave()
         
     def _reorder_queue_helper(self, song, songs, by="track"):
-        tw, weighted_songs = self.get_weights([song], songs, by=by)
+        tw, weighted_songs = self.get_weights(song, songs, by=by)
         if tw == 0:
             log("already sorted by %s" % by)
             return songs
