@@ -63,8 +63,7 @@ def dictify(tups):
     return dictified
 
 def escape(foo):
-    foo = foo.replace('"', '\\"')
-    return foo
+    return foo.replace('"', '\\"')
 
 class AutoQueue(EventPlugin):
     PLUGIN_ID = "AutoQueue"
