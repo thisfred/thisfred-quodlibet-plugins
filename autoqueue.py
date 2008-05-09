@@ -278,7 +278,7 @@ class AutoQueue(EventPlugin):
                             stripped = ":".join(tag.split(":")[1:])
                         else:
                             stripped = tag
-                        stripped = escape(skipped)
+                        stripped = escape(stripped)
                         search_tags.extend([
                             'tag = "%s"' % stripped,
                             'tag = "artist:%s"' % stripped,
