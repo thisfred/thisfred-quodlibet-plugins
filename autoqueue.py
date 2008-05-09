@@ -26,6 +26,7 @@ from parse import Query
 from qltk import Frame
 from library import library
 import config
+import util
 
 TRACK_URL = "http://ws.audioscrobbler.com/1.0/track/%s/%s/similar.xml"
 ARTIST_URL = "http://ws.audioscrobbler.com/1.0/artist/%s/similar.xml"
@@ -36,7 +37,7 @@ verbose = True
 INT_SETTINGS = {
     "artist_block_time": 7,
     "track_block_time": 30,
-    "desired_queue_length": 5,
+    "desired_queue_length": 4200,
     "cache_time": 90,}
 
 BOOL_SETTINGS = {
@@ -135,7 +136,8 @@ class AutoQueue(EventPlugin):
                            key, value and 'true' or 'false')
         for key, value in STR_SETTINGS.items():
             try:
-                setattr(self, key, config.get("plugins", "autoqueue_%s" % key))
+                setattr(
+                    self, key, config.get("plugins", "autoqueue_%s" % key))
             except:
                 setattr(self, key, value)
                 config.set("plugins", "autoqueue_%s" % key, value)
@@ -203,7 +205,9 @@ class AutoQueue(EventPlugin):
         bg.start()
 
     def need_songs(self):
-        return len(main.playlist.q) < self.desired_queue_length
+        model = main.playlist.q.get()
+        time = sum([row.get("~#length", 0) for row in model])
+        return time < self.desired_queue_length
         
     def add_to_queue(self):
         self.blocked = True
