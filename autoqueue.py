@@ -37,7 +37,7 @@ verbose = True
 INT_SETTINGS = {
     "artist_block_time": 7,
     "track_block_time": 30,
-    "desired_queue_length": 4200,
+    "desired_queue_length": 3900,
     "cache_time": 90,}
 
 BOOL_SETTINGS = {
@@ -61,6 +61,11 @@ def dictify(tups):
         value = tup[-1]
         dictified[key] = value
     return dictified
+
+def escape(foo):
+    foo = foo.replace('"', '\\"')
+    foo = foo.replace('#', '')
+    return foo
 
 class AutoQueue(EventPlugin):
     PLUGIN_ID = "AutoQueue"
@@ -222,14 +227,15 @@ class AutoQueue(EventPlugin):
                 search_tracks = []
                 search = ''
                 search_tracks = [
-                    '&(artist = "%s", title = "%s")' % (artist, title)
+                    '&(artist = "%s", title = "%s")' %
+                    (escape(artist), escape(title))
                     for (artist, title, match) in similar_tracks
                     if not self.is_blocked(artist)
                     ]
                 version_tracks = [
                     '&(artist = "%s", title = "%s")' %
-                    (artist,
-                     "(".join(title.split("(")[:-1]).strip())
+                    (escape(artist),
+                     escape("(".join(title.split("(")[:-1]).strip()))
                     for (artist, title, match) in similar_tracks
                     if "(" in title and not self.is_blocked(artist)
                     ]
@@ -248,7 +254,8 @@ class AutoQueue(EventPlugin):
                 search_artists = []
                 search = ''
                 search_artists = [
-                    'artist = "%s"' % artist[0] for artist in similar_artists
+                    'artist = "%s"' % escape(artist[0])
+                    for artist in similar_artists
                     if not self.is_blocked(artist[0])]
                 if search_artists:
                     search = "&(|(%s),%s)" % (
@@ -262,7 +269,7 @@ class AutoQueue(EventPlugin):
                 tags = self.get_last_song().list("tag")
                 exclude_artists = "&(%s)" % ",".join([
                     '!artist = "%s"' %
-                    artist for artist in self.get_blocked_artists()])
+                    escape(artist) for artist in self.get_blocked_artists()])
                 if tags:
                     log("Searching for tags: %s" % tags)
                     search = ''
@@ -273,6 +280,7 @@ class AutoQueue(EventPlugin):
                             stripped = ":".join(tag.split(":")[1:])
                         else:
                             stripped = tag
+                        stripped = escape(skipped)
                         search_tags.extend([
                             'tag = "%s"' % stripped,
                             'tag = "artist:%s"' % stripped,
@@ -377,6 +385,7 @@ class AutoQueue(EventPlugin):
             myfilter = Query(search).search
             songs = filter(myfilter, library.itervalues())
         except (Query.error, RuntimeError):
+            log("error in: %s" % search)
             return False
         log("%s songs found" % len(songs))
         if not songs:
