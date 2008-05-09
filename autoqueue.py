@@ -64,7 +64,6 @@ def dictify(tups):
 
 def escape(foo):
     foo = foo.replace('"', '\\"')
-    foo = foo.replace('#', '')
     return foo
 
 class AutoQueue(EventPlugin):
