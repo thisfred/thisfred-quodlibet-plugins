@@ -19,7 +19,7 @@ class AutoRating(EventPlugin):
 
     def plugin_on_song_started(self, song):
         if song is not None and len(main.playlist.q) > 0:
-            title = song.comma("title").lower()
+            title = song.comma("title").lower().replace("#", "")
             main.browser.set_text(title)
         else:
             if (main.browser.status ==
