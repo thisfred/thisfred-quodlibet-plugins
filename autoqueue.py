@@ -124,8 +124,8 @@ class AutoQueue(EventPlugin):
         self._songs = []
         self.similar_artists = {}
         self.similar_tracks = {}
-        pickle = open(self.DUMP, 'r')
         try:
+            pickle = open(self.DUMP, 'r')
             unpickler = Unpickler(pickle)
             self._blocked_artists, self._blocked_artists_times \
                 = unpickler.load()
@@ -163,7 +163,7 @@ class AutoQueue(EventPlugin):
                     self, key, config.get("plugins", "autoqueue_%s" % key))
             except:
                 setattr(self, key, vdict['value'])
-                config.set("plugins", "autoqueue_%s" % key, vdict['vdict'])
+                config.set("plugins", "autoqueue_%s" % key, vdict['value'])
                 
     def create_db(self):
         """ Set up a database for the artist and track similarity scores
