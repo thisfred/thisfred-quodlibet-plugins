@@ -31,9 +31,6 @@ import util
 TRACK_URL = "http://ws.audioscrobbler.com/1.0/track/%s/%s/similar.xml"
 ARTIST_URL = "http://ws.audioscrobbler.com/1.0/artist/%s/similar.xml"
 
-# Set this to True to enable logging
-verbose = True
-
 INT_SETTINGS = {
     'artist_block_time': {
         'value': 1,
@@ -63,16 +60,15 @@ BOOL_SETTINGS = {
         'label': 'by artist'},
     'by_tags': {
         'value': True,
-        'label': 'by tags'},}
+        'label': 'by tags'},
+    'verbose': {
+        'value': False,
+        'log to console'},}
 
 STR_SETTINGS = {
     'pick': {
         'value': 'best',
         'label': 'pick method'},}
-
-def log(msg):
-    if not verbose: return
-    print "[autoqueue]", msg
 
 def dictify(tups):
     dictified = {}
@@ -141,6 +137,10 @@ class AutoQueue(EventPlugin):
                 self.create_db()
         # Set up exit hook to dump cache
         gtk.quit_add(0, self.dump_stuff)
+
+    def log(self, msg):
+        if not self.verbose: return
+        print "[autoqueue]", msg
         
     def read_config(self):
         for key, vdict in INT_SETTINGS.items():
@@ -169,7 +169,7 @@ class AutoQueue(EventPlugin):
     def create_db(self):
         """ Set up a database for the artist and track similarity scores
         """
-        log("create_db")
+        self.log("create_db")
         connection = sqlite3.connect(self.DB)
         cursor = connection.cursor()
         cursor.execute(
@@ -204,11 +204,11 @@ class AutoQueue(EventPlugin):
         return 0
 
     def enabled(self):
-        log("enabled")
+        self.log("enabled")
         self.__enabled = True
 
     def disabled(self):
-        log("disabled")
+        self.log("disabled")
         self.__enabled = False
 
     def plugin_on_song_started(self, song):
@@ -290,7 +290,7 @@ class AutoQueue(EventPlugin):
                     '!artist = "%s"' %
                     escape(artist) for artist in self.get_blocked_artists()])
                 if tags:
-                    log("Searching for tags: %s" % tags)
+                    self.log("Searching for tags: %s" % tags)
                     search = ''
                     search_tags = []
                     for tag in tags:
@@ -322,7 +322,7 @@ class AutoQueue(EventPlugin):
         """
         self._blocked_artists.append(artist_name)
         self._blocked_artists_times.append(self.now)
-        log("Blocked artist: %s (%s)" % (
+        self.log("Blocked artist: %s (%s)" % (
             artist_name,
             len(self._blocked_artists)))
         try:
@@ -344,7 +344,7 @@ class AutoQueue(EventPlugin):
             if self._blocked_artists_times[
                 0] + timedelta(self.artist_block_time) > self.now:
                 break
-            log("Unblocked %s (%s)" % (
+            self.log("Unblocked %s (%s)" % (
                 self._blocked_artists.pop(0),
                 self._blocked_artists_times.pop(0)))
 
@@ -381,7 +381,7 @@ class AutoQueue(EventPlugin):
         
     def enqueue(self, song):
         gtk.gdk.threads_enter()
-        log("queuing song")
+        self.log("queuing song")
         if not self.is_blocked(song.comma("artist").lower()):
             main.playlist.enqueue([song])
         gtk.gdk.threads_leave()
@@ -389,10 +389,10 @@ class AutoQueue(EventPlugin):
     def _reorder_queue_helper(self, song, songs, by="track"):
         tw, weighted_songs = self.get_weights(song, songs, by=by)
         if tw == 0:
-            log("already sorted by %s" % by)
+            self.log("already sorted by %s" % by)
             return songs
         weighted_songs.sort(reverse=True)
-        log("sorted by %s: \n%s" % (by, "\n".join(["%05d %03d %s - %s" % (
+        self.log("sorted by %s: \n%s" % (by, "\n".join(["%05d %03d %s - %s" % (
             score, len(weighted_songs) + 1 - i, song.comma(
             "artist"), song.comma("title"))
             for score, i, song in weighted_songs])))
@@ -404,9 +404,9 @@ class AutoQueue(EventPlugin):
             myfilter = Query(search).search
             songs = filter(myfilter, library.itervalues())
         except (Query.error, RuntimeError):
-            log("error in: %s" % search)
+            self.log("error in: %s" % search)
             return False
-        log("%s songs found" % len(songs))
+        self.log("%s songs found" % len(songs))
         if not songs:
             return False
         if self.pick =="random":
@@ -527,7 +527,7 @@ class AutoQueue(EventPlugin):
         
     def get_similar_tracks(self):
         artist_name, title = self.get_artist_and_title(self.get_last_song())
-        log("Getting similar tracks from last.fm for: %s - %s" % (
+        self.log("Getting similar tracks from last.fm for: %s - %s" % (
             artist_name, title))
         enc_artist_name= artist_name.encode("utf-8")
         enc_title = title.encode("utf-8")
@@ -565,7 +565,7 @@ class AutoQueue(EventPlugin):
             
     def get_similar_artists(self):
         artist_name = self.get_artist_and_title(self.get_last_song())[0]
-        log("Getting similar artists from last.fm for: %s " % artist_name)
+        self.log("Getting similar artists from last.fm for: %s " % artist_name)
         if ("&" in artist_name or "/" in artist_name or "?" in artist_name
             or "#" in artist_name):
             artist_name = urllib.quote_plus(artist_name)
@@ -636,7 +636,7 @@ class AutoQueue(EventPlugin):
             if updated + timedelta(self.cache_time) > self.now:
                 artist_name = self.get_artist_and_title(
                     self.get_last_song())[0]
-                log(
+                self.log(
                     "Getting similar artists from db for: %s " %
                     artist_name)
                 cursor.execute(
@@ -666,7 +666,7 @@ class AutoQueue(EventPlugin):
         if updated:
             updated = datetime(*strptime(updated, "%Y-%m-%d %H:%M:%S")[0:6])
             if updated + timedelta(self.cache_time) > self.now:
-                log("Getting similar tracks from db for: %s - %s" % (
+                self.log("Getting similar tracks from db for: %s - %s" % (
                     artist, title))
                 cursor.execute(
                     "SELECT artists.name, tracks.title, track_2_track.match"
