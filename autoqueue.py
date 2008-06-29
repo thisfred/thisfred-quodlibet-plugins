@@ -126,13 +126,14 @@ class AutoQueue(EventPlugin):
         self.similar_tracks = {}
         try:
             pickle = open(self.DUMP, 'r')
-            unpickler = Unpickler(pickle)
-            self._blocked_artists, self._blocked_artists_times \
-                = unpickler.load()
-        except:
-            pass
-        finally:
-            pickle.close()
+            try:
+                unpickler = Unpickler(pickle)
+                self._blocked_artists, self._blocked_artists_times \
+                                       = unpickler.load()
+            finally:
+                pickle.close()
+        except IOError:
+            self._blocked_artists = self._blocked_artists_times = []
         if self.cache:
             try:
                 os.stat(self.DB)
@@ -781,7 +782,6 @@ class AutoQueue(EventPlugin):
 
         def int_changed(entry, key):
             value = entry.get_text()
-            print value
             config.set('plugins', 'autoqueue_%s' % key, value)
             setattr(self, key, int(value))
             
