@@ -63,7 +63,7 @@ BOOL_SETTINGS = {
         'label': 'by tags'},
     'verbose': {
         'value': False,
-        'log to console'},}
+        'label': 'log to console'},}
 
 STR_SETTINGS = {
     'pick': {
@@ -129,7 +129,7 @@ class AutoQueue(EventPlugin):
             finally:
                 pickle.close()
         except IOError:
-            self._blocked_artists = self._blocked_artists_times = []
+            self._blocked_artists = []._blocked_artists_times = []
         if self.cache:
             try:
                 os.stat(self.DB)
