@@ -35,20 +35,40 @@ ARTIST_URL = "http://ws.audioscrobbler.com/1.0/artist/%s/similar.xml"
 verbose = True
 
 INT_SETTINGS = {
-    "artist_block_time": 7,
-    "track_block_time": 30,
-    "desired_queue_length": 3900,
-    "cache_time": 90,}
+    'artist_block_time': {
+        'value': 1,
+        'label': 'block artist (days)'},
+    'track_block_time':  {
+        'value': 90,
+        'label': 'block track (days)'},
+    'desired_queue_length': {
+        'value': 4400,
+        'label': 'queue (seconds)'},
+    'cache_time': {
+        'value': 90,
+        'label': 'cache (days)'},}
 
 BOOL_SETTINGS = {
-    "cache": SQL and True,
-    "include_rating": True,
-    "by_tracks": True,
-    "by_artists": True,
-    "by_tags": True,}
+    'cache': {
+        'value': SQL and True,
+        'label': 'caching'},
+    'include_rating': {
+        'value': True,
+        'label': 'include rating'},
+    'by_tracks': {
+        'value': True,
+        'label': 'by track'},
+    'by_artists': {
+        'value': True,
+        'label': 'by artist'},
+    'by_tags': {
+        'value': True,
+        'label': 'by tags'},}
 
 STR_SETTINGS = {
-    "pick": "best",}
+    'pick': {
+        'value': 'best',
+        'label': 'pick method'},}
 
 def log(msg):
     if not verbose: return
@@ -122,28 +142,28 @@ class AutoQueue(EventPlugin):
         gtk.quit_add(0, self.dump_stuff)
         
     def read_config(self):
-        for key, value in INT_SETTINGS.items():
+        for key, vdict in INT_SETTINGS.items():
             try:
                 setattr(self, key, config.getint(
                     "plugins", "autoqueue_%s" % key))
             except:
-                setattr(self, key, value)
-                config.set("plugins", "autoqueue_%s" % key, value)
-        for key, value in BOOL_SETTINGS.items():
+                setattr(self, key, vdict['value'])
+                config.set("plugins", "autoqueue_%s" % key, vdict['value'])
+        for key, vdict in BOOL_SETTINGS.items():
             try:
                 setattr(self, key, config.get(
                     "plugins", "autoqueue_%s" % key).lower() == 'true')
             except:
-                setattr(self, key, value)
+                setattr(self, key, vdict['value'])
                 config.set("plugins", "autoqueue_%s" %
-                           key, value and 'true' or 'false')
-        for key, value in STR_SETTINGS.items():
+                           key, vdict['value'] and 'true' or 'false')
+        for key, vdict in STR_SETTINGS.items():
             try:
                 setattr(
                     self, key, config.get("plugins", "autoqueue_%s" % key))
             except:
-                setattr(self, key, value)
-                config.set("plugins", "autoqueue_%s" % key, value)
+                setattr(self, key, vdict['value'])
+                config.set("plugins", "autoqueue_%s" % key, vdict['vdict'])
                 
     def create_db(self):
         """ Set up a database for the artist and track similarity scores
@@ -742,66 +762,68 @@ class AutoQueue(EventPlugin):
             self._insert_track_match(track_id, id2, match)
         self._update_track(track_id)
 
-    def bool_changed(self, b):
-        if b.get_active():
-            setattr(self, b.get_name(), True)
-        else:
-            setattr(self, b.get_name(), False)
-        config.set('plugins', "autoqueue_%s" % b.get_name(), b.get_active())
-
     def PluginPreferences(self, parent):
-        vb = gtk.VBox(spacing = 3)
-        tooltips = gtk.Tooltips().set_tip
 
-        ## pattern_box = gtk.HBox(spacing = 3)
-        ## pattern_box.set_border_width(3)
+        def bool_changed(widget):
+            if widget.get_active():
+                setattr(self, widget.get_name(), True)
+            else:
+                setattr(self, widget.get_name(), False)
+            config.set(
+                'plugins',
+                'autoqueue_%s' % widget.get_name(),
+                widget.get_active() and 'true' or 'false')
+            
+        def str_changed(entry, key):
+            value = entry.get_text()
+            config.set('plugins', 'autoqueue_%s' % key, value)
+            setattr(self, key, value)
 
-        ## pattern = gtk.Entry()
-        ## pattern.set_text(self.pattern)
-        ## pattern.connect('changed', self.pattern_changed)
-        ## pattern_box.pack_start(gtk.Label("Pattern:"), expand = False)
-        ## pattern_box.pack_start(pattern)
-
-        ## accounts_box = gtk.HBox(spacing = 3)
-        ## accounts_box.set_border_width(3)
-        ## accounts = gtk.Entry()
-        ## accounts.set_text(join(self.accounts))
-        ## accounts.connect('changed', self.accounts_changed)
-        ## tooltips(accounts, "List accounts, separated by spaces, for "
-        ##                      "changing status message. If none are specified, "
-        ##                      "status message of all accounts will be changed.")
-        ## accounts_box.pack_start(gtk.Label("Accounts:"), expand = False)
-        ## accounts_box.pack_start(accounts)
-
-        ## c = gtk.CheckButton(label="Add '[paused]'")
-        ## c.set_active(self.paused)
-        ## c.connect('toggled', self.paused_changed)
-        ## tooltips(c, "If checked, '[paused]' will be added to "
-        ##             "status message on pause.")
-
+        def int_changed(entry, key):
+            value = entry.get_text()
+            print value
+            config.set('plugins', 'autoqueue_%s' % key, value)
+            setattr(self, key, int(value))
+            
         table = gtk.Table()
-        self.list = []
+        table.set_col_spacings(3)
         i = 0
         j = 0
-        for status in BOOL_SETTINGS.keys():
-            button = gtk.CheckButton(label=status)
-            button.set_name(status)
+        for setting in BOOL_SETTINGS:
+            button = gtk.CheckButton(label=BOOL_SETTINGS[setting]['label'])
+            button.set_name(setting)
             button.set_active(
                 config.get(
-                "plugins", "autoqueue_%s" % status).lower() == 'true')
-            button.connect('toggled', self.bool_changed)
-            self.list.append(button)
+                "plugins", "autoqueue_%s" % setting).lower() == 'true')
+            button.connect('toggled', bool_changed)
             table.attach(button, i, i+1, j, j+1)
-            if i == 2:
+            if i == 1:
                 i = 0
                 j += 1
             else:
                 i += 1
-
-        ## vb.pack_start(pattern_box)
-        ## vb.pack_start(accounts_box)
-        ## vb.pack_start(c)
-        vb.pack_start(Frame(label="Thingum"))
-        vb.pack_start(table)
-
-        return vb
+        for setting in INT_SETTINGS:
+            j += 1
+            label = gtk.Label('%s:' % INT_SETTINGS[setting]['label'])
+            entry = gtk.Entry()
+            table.attach(label, 0, 1, j, j+1, xoptions=gtk.FILL | gtk.SHRINK)
+            table.attach(entry, 1, 2 ,j, j+1, xoptions=gtk.FILL | gtk.SHRINK)
+            entry.connect('changed', int_changed, setting)
+            try:
+                entry.set_text(
+                    config.get('plugins', 'autoqueue_%s' % setting))
+            except:
+                pass
+        for setting in STR_SETTINGS:
+            j += 1
+            label = gtk.Label('%s:' % STR_SETTINGS[setting]['label'])
+            entry = gtk.Entry()
+            table.attach(label, 0, 1, j, j+1, xoptions=gtk.FILL | gtk.SHRINK)
+            table.attach(entry, 1, 2 ,j, j+1, xoptions=gtk.FILL | gtk.SHRINK)
+            entry.connect('changed', str_changed, setting)
+            try:
+                entry.set_text(config.get('plugins', 'autoqueue_%s' % setting))
+            except:
+                pass
+            
+        return table
