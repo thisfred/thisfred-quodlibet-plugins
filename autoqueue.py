@@ -29,8 +29,7 @@ import config
 import util
 
 TRACK_URL = "http://ws.audioscrobbler.com/1.0/track/%s/%s/similar.xml"
-ARTIST_URL = "http://ws.audioscrobbler.com/1.0/artist/%s/similar.xml"
-
+ARTIST_URL = "http://ws.audioscrobbler.com/2.0/?method=artist.getsimilar&artist=%s&api_key=09d0975a99a4cab235b731d31abf0057"
 INT_SETTINGS = {
     'artist_block_time': {
         'value': 1,
