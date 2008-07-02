@@ -29,7 +29,8 @@ import config
 import util
 
 TRACK_URL = "http://ws.audioscrobbler.com/1.0/track/%s/%s/similar.xml"
-ARTIST_URL = "http://ws.audioscrobbler.com/2.0/?method=artist.getsimilar&artist=%s&api_key=09d0975a99a4cab235b731d31abf0057"
+ARTIST_URL = "http://ws.audioscrobbler.com/2.0/?method=artist.getsimilar" \
+             "&artist=%s&api_key=09d0975a99a4cab235b731d31abf0057"
 INT_SETTINGS = {
     'artist_block_time': {
         'value': 1,
@@ -128,7 +129,8 @@ class AutoQueue(EventPlugin):
             finally:
                 pickle.close()
         except IOError:
-            self._blocked_artists = []._blocked_artists_times = []
+            self._blocked_artists = []
+            self._blocked_artists_times = []
         if self.cache:
             try:
                 os.stat(self.DB)
