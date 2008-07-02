@@ -94,9 +94,6 @@ class AutoQueue(EventPlugin):
     except AttributeError:
         DB = os.path.join(const.DIR, "similarity.db")
         
-
-    _blocked_artists = []
-    _blocked_artists_times = []
     __enabled = False
     
     def __init__(self):
@@ -120,6 +117,8 @@ class AutoQueue(EventPlugin):
         self._songs = []
         self.similar_artists = {}
         self.similar_tracks = {}
+        self._blocked_artists = []
+        self._blocked_artists_times = []
         try:
             pickle = open(self.DUMP, 'r')
             try:
@@ -129,8 +128,7 @@ class AutoQueue(EventPlugin):
             finally:
                 pickle.close()
         except IOError:
-            self._blocked_artists = []
-            self._blocked_artists_times = []
+            pass
         if self.cache:
             try:
                 os.stat(self.DB)
