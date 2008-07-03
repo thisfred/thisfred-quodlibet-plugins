@@ -21,7 +21,7 @@ class AutoRating(EventPlugin):
     ignore_empty_queue = True
     def plugin_on_song_started(self, song):
         if song is not None and (
-            ignore_empty_queue or len(main.playlist.q) > 0):
+            self.ignore_empty_queue or len(main.playlist.q) > 0):
             title = song.comma("title").lower().replace("#", "")
             main.browser.set_text(title)
         else:
