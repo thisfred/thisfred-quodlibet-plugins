@@ -109,6 +109,8 @@ class AutoQueue(EventPlugin):
         self.by_artists = True
         self.by_tags = True
         self.pick = "best"
+        self.cached_artist_ids = {}
+        self.cached_track_ids = {}
 
         self.blocked = False
         self.read_config()
@@ -271,7 +273,7 @@ class AutoQueue(EventPlugin):
                         "#(laststarted > %s days)" % self.track_block_time)
                     self.similar_tracks = dictify(similar_tracks)
                     if self.pick_songs(search,  by="track"):
-                        self.enqueue(self._songs.pop(0))
+                        self.enqueue(self._songs.popleft())
                         continue
             if self.by_artists:
                 similar_artists = self.get_cached_similar_artists()
@@ -287,7 +289,7 @@ class AutoQueue(EventPlugin):
                         "#(laststarted > %s days)" % self.track_block_time)
                     self.similar_artists = dictify(similar_artists)
                     if self.pick_songs(search, by="artist"):
-                        self.enqueue(self._songs.pop(0))
+                        self.enqueue(self._songs.popleft())
                         continue
             if self.by_tags:
                 tags = self.get_last_song().list("tag")
@@ -314,11 +316,11 @@ class AutoQueue(EventPlugin):
                         exclude_artists,
                         "#(laststarted > %s days)" % self.track_block_time)
                     if self.pick_songs(search, by="tag"):
-                        self.enqueue(self._songs.pop(0))
+                        self.enqueue(self._songs.popleft())
                         continue
             if self._songs:
                 self.reorder_songs()
-                self.enqueue(self._songs.pop(0))
+                self.enqueue(self._songs.popleft())
         self.blocked = False
        
     def block_artist(self, artist_name):
@@ -350,8 +352,8 @@ class AutoQueue(EventPlugin):
                 0] + timedelta(self.artist_block_time) > self.now:
                 break
             self.log("Unblocked %s (%s)" % (
-                self._blocked_artists.pop(0),
-                self._blocked_artists_times.pop(0)))
+                self._blocked_artists.popleft(),
+                self._blocked_artists_times.popleft()))
 
     def is_blocked(self, artist_name):
         return artist_name in self.get_blocked_artists()
@@ -593,6 +595,17 @@ class AutoQueue(EventPlugin):
             artists.append((name, match))
         return artists
 
+    def cache(func):
+        cache = {}
+        def cached(*args):
+            if args in cache:
+                return cache[args]
+            result = func(*args)
+            cache[args] = result
+            return result
+        return cached
+
+    @cache
     def get_artist(self, artist_name):
         cursor = self.connection.cursor()
         artist_name = artist_name.encode("UTF-8")
@@ -605,6 +618,7 @@ class AutoQueue(EventPlugin):
         cursor.execute("SELECT * FROM artists WHERE name = ?", (artist_name,))
         return cursor.fetchone()
 
+    @cache
     def get_track(self, artist_name, title):
         cursor = self.connection.cursor()
         title = title.encode("UTF-8")
