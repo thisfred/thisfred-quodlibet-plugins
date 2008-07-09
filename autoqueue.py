@@ -6,6 +6,7 @@
 # it under the terms of the GNU General Public License version 2 as
 # published by the Free Software Foundation
 
+from collections import deque
 from datetime import datetime, timedelta
 from time import strptime
 import urllib, threading
@@ -114,17 +115,22 @@ class AutoQueue(EventPlugin):
         self.now = datetime.now()
         self.connection = None
         self.song = None
-        self._songs = []
+        self._songs = deque([])
         self.similar_artists = {}
         self.similar_tracks = {}
-        self._blocked_artists = []
-        self._blocked_artists_times = []
+        self._blocked_artists = deque([])
+        self._blocked_artists_times = deque([])
         try:
             pickle = open(self.DUMP, 'r')
             try:
                 unpickler = Unpickler(pickle)
-                self._blocked_artists, self._blocked_artists_times \
-                                       = unpickler.load()
+                artists, times = unpickler.load()
+                if isinstance(artists, list):
+                    artists = deque(artists)
+                if isinstance(times, list):
+                    times = deque(times)
+                self._blocked_artists = artists
+                self._blocked_artists_times = times
             finally:
                 pickle.close()
         except IOError:
@@ -352,7 +358,7 @@ class AutoQueue(EventPlugin):
 
     def get_blocked_artists(self):
         """prevent artists already in the queue from being queued"""
-        return self._blocked_artists + [
+        return list(self._blocked_artists) + [
             song.comma("artist").lower() for song in main.playlist.q.get()]
 
     def get_last_song(self):

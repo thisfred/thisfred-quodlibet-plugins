@@ -18,7 +18,7 @@ class AutoRating(EventPlugin):
     PLUGIN_DESC = ("Automatically do a search for the title of the"
                    "current song. (Helps to indentify covers & doubles.)")
 
-    ignore_empty_queue = True
+    ignore_empty_queue = False
     def plugin_on_song_started(self, song):
         if song is not None and (
             self.ignore_empty_queue or len(main.playlist.q) > 0):

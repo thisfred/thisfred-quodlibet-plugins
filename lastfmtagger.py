@@ -1,33 +1,33 @@
-# LastFMTagger: a Last.fm tagging plugin for Quod Libet.
-# version 0.1 (infrastructure copied from QLScrobbler 0.8)
-# (C) 2005-2007 by Eric Casteleijn <thisfred@gmail.com>
-#                  Joshua Kwan <joshk@triplehelix.org>,
-#                  Joe Wreschnig <piman@sacredchao.net>,
-# Licensed under GPLv2. See Quod Libet's COPYING for more information.
+"""
+LastFMTagger: a Last.fm tagging plugin for Quod Libet.
+version 0.1 (infrastructure copied from QLScrobbler 0.8)
+(C) 2005-2007 by Eric Casteleijn <thisfred@gmail.com>
+                 Joshua Kwan <joshk@triplehelix.org>,
+                 Joe Wreschnig <piman@sacredchao.net>,
+Licensed under GPLv2. See Quod Libet's COPYING for more information.
+"""
 
-import random
-import md5, urllib, time, os
-import player, config, const, widgets, parse
-import gobject, gtk, xmlrpclib, socket
+import md5, urllib
+import config, widgets
+import gobject, gtk, xmlrpclib
 from time import time
 from xml.dom import minidom
-from random import randint
+from qltk.msg import Message, WarningMessage
 from qltk.entry import ValidatingEntry
 from library import library
 from quodlibet.util import copool
-
-def to(string): print string.encode("ascii", "replace")
-
 from plugins.events import EventPlugin
 
 # Set this to True to enable logging
-verbose = True
+VERBOSE = True
 
 def log(msg):
-    if verbose:
+    """logging function"""
+    if VERBOSE:
         print "[lastfmtagger]", msg
 
 class LastFMTagger(EventPlugin):
+    """Main plugin class"""
     # session invariants
     PLUGIN_ID = "LastFMTagger"
     PLUGIN_NAME = _("Last.fm Tagger")
@@ -37,15 +37,21 @@ class LastFMTagger(EventPlugin):
     CLIENT = "lmt"
     CLIENT_VERSION = "0.1"
     PROTOCOL_VERSION = "1.2"
-    TRACK_TAG_URL = "http://ws.audioscrobbler.com/1.0/user/%s/tracktags.xml?artist=%s&track=%s"
-    ARTIST_TAG_URL = "http://ws.audioscrobbler.com/1.0/user/%s/artisttags.xml?artist=%s"
-    ALBUM_TAG_URL = "http://ws.audioscrobbler.com/1.0/user/%s/albumtags.xml?artist=%s&album=%s"
+    TRACK_TAG_URL = \
+        "http://ws.audioscrobbler.com/1.0/user/%s/tracktags.xml" \
+        "?artist=%s&track=%s"
+    ARTIST_TAG_URL = \
+        "http://ws.audioscrobbler.com/1.0/user/%s/artisttags.xml?artist=%s"
+    ALBUM_TAG_URL = \
+        "http://ws.audioscrobbler.com/1.0/user/%s/albumtags.xml?" \
+        "artist=%s&album=%s"
     
     # things that could change
     
     username = ""
     password = ""
-    
+    session = ""
+
     tag = '~tag'
     
     # state management
@@ -60,47 +66,60 @@ class LastFMTagger(EventPlugin):
 
     
     def plugin_on_song_started(self, song):
-        if song is None: return
-        copool.add(self.sync_tags, song, 'down')
+        """Triggered when song starts"""
+        if song is None:
+            return
+        log("===> DOWN")
+        copool.add(self.sync_down, song)
 
     def plugin_on_song_ended(self, song, skipped):
-        if song is None: return
-        copool.add(self.sync_tags, song, 'up')
+        """Triggered when song ends/is skipped"""
+        if song is None:
+            return
+        log("===> UP")
+        copool.add(self.sync_up, song)
         
     def read_config(self):
+        """Read the options from the configuration file"""
         username = ""
         password = ""
+        session = ""
         try:
             username = config.get("plugins", "lastfmtagger_username")
             password = config.get("plugins", "lastfmtagger_password")
+            session = config.get("plugins", "lastfmtagger_session")
         except:
             if (self.need_config == False and
                 getattr(self, 'PMEnFlag', False)):
-                self.quick_dialog("Please visit the Preferences window to set LastFMTagger up. Until then, tags will not be synchronized.", gtk.MESSAGE_INFO)
+                self.quick_dialog(
+                    "Please visit the Preferences window to set LastFMTagger"
+                    " up. Until then, tags will not be synchronized.",
+                    gtk.MESSAGE_INFO)
                 self.need_config = True
                 return
 
         self.username = username
-        
+        self.session = session
         hasher = md5.new()
-        hasher.update(password);
+        hasher.update(password)
         self.password = hasher.hexdigest()
         try:
-            self.tag = config.get("plugins", "lastfmtagger_files") == "true" and "tag" or "~tag"
-        except: pass
+            self.tag = config.get(
+                "plugins", "lastfmtagger_files") == "true" and "tag" or "~tag"
+        except:
+            pass
         self.need_config = False
 
     def __destroy_cb(self, dialog, response_id):
         dialog.destroy()
     
-    def quick_dialog_helper(self, type, str):
-        dialog = Message(gtk.MESSAGE_INFO, widgets.main, "LastFMTagger", str)
+    def quick_dialog_helper(self, dtype, dstr):
+        dialog = Message(gtk.MESSAGE_INFO, widgets.main, "LastFMTagger", dstr)
         dialog.connect('response', self.__destroy_cb)
         dialog.show()
 
-    def quick_dialog(self, str, type):
-        gobject.idle_add(self.quick_dialog_helper, type, str)
-    
+    def quick_dialog(self, dstr, dtype):
+        gobject.idle_add(self.quick_dialog_helper, dtype, dstr)
     
     def enabled(self):
         self.__enabled = True
@@ -177,7 +196,7 @@ class LastFMTagger(EventPlugin):
             server = xmlrpclib.ServerProxy(
                 "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
             server.tagTrack(*args)
-        except :
+        except:
             pass
 
     def get_tags_for(self, tags, for_=""):
@@ -211,8 +230,6 @@ class LastFMTagger(EventPlugin):
         album_tags = set(tag for tag in tags if tag.startswith('album:'))
         if not album_tags: return album_tags
         random_string, md5hash = self.get_timestamp()
-        server = xmlrpclib.ServerProxy(
-            "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
         self._submit_album_tags(
             self.username,
             random_string,
@@ -237,8 +254,6 @@ class LastFMTagger(EventPlugin):
         try:
             song[self.tag] = '\n'.join(tags)
             log("saved tags")
-        except:
-            pass
         finally:
             gtk.gdk.threads_leave()
 
@@ -262,6 +277,14 @@ class LastFMTagger(EventPlugin):
             self.submit_album_tags(song, album_tags)
         self.lastfm_cache[
             self.ALBUM_TAG_URL % (self.username, artist, album)] = album_tags
+
+    def sync_up(self, song):
+        self.sync_tags(song, 'up')
+        yield True
+        
+    def sync_down(self, song):
+        self.sync_tags(song, 'down')
+        yield True
         
     def sync_tags(self, song, direction):
         """
@@ -297,7 +320,6 @@ class LastFMTagger(EventPlugin):
             if all_tags != lastfm_tags:
                 self.submit_tags(
                     song, artist, album, title, all_tags, lastfm_tags)
-        yield True
         if direction == 'down':
             if all_tags > ql_tags:
                 self.save_tags(song, all_tags)
@@ -336,39 +358,57 @@ class LastFMTagger(EventPlugin):
 
         table = gtk.Table(6, 3)
         table.set_col_spacings(3)
-        lt = gtk.Label(_("Please enter your Audioscrobbler\nusername and password."))
+        lt = gtk.Label(
+            _("Please enter your Audioscrobbler\nusername and password."))
         lu = gtk.Label(_("Username:"))
         lp = gtk.Label(_("Password:"))
-        files = gtk.CheckButton(_("Write tags to files. (When disabled the\ntags are written to the database only.)"))
+        ls = gtk.Label(_("Session:"))
 
-        for l in [lt, lu, lp]:
+        files = gtk.CheckButton(
+            _("Write tags to files. (When disabled the\ntags are written to"
+              " the database only.)"))
+
+        for l in [lt, lu, lp, ls]:
             l.set_line_wrap(True)
             l.set_alignment(0.0, 0.5)
         table.attach(lt, 0, 2, 0, 1, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(lu, 0, 1, 1, 2, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(lp, 0, 1, 2, 3, xoptions=gtk.FILL | gtk.SHRINK)
+        table.attach(ls, 0, 1, 3, 4, xoptions=gtk.FILL | gtk.SHRINK)
             
         userent = gtk.Entry()
         pwent = gtk.Entry()
+        session = gtk.Entry()
         pwent.set_visibility(False)
         pwent.set_invisible_char('*')
-        table.set_border_width(6)
         
-
-
-        try: userent.set_text(config.get("plugins", "lastfmtagger_username"))
-        except: pass
-        try: pwent.set_text(config.get("plugins", "lastfmtagger_password"))
-        except: pass
+        table.set_border_width(6)
+        try:
+            userent.set_text(config.get("plugins", "lastfmtagger_username"))
+        except:
+            pass
+        try:
+            pwent.set_text(config.get("plugins", "lastfmtagger_password"))
+        except:
+            pass
+        try:
+            session.set_text(config.get("plugins", "lastfmtagger_session"))
+        except:
+            pass
+        
         try:
             if config.get("plugins", "lastfmtagger_files") == "true":
                 files.set_active(True)
-        except: pass
+        except:
+            pass
         table.attach(userent, 1, 2, 1, 2, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(pwent, 1, 2, 2, 3, xoptions=gtk.FILL | gtk.SHRINK)
+        table.attach(session, 1, 2, 3, 4, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(files, 0, 2, 5, 7, xoptions=gtk.FILL | gtk.SHRINK)
         pwent.connect('changed', changed, 'password')
         userent.connect('changed', changed, 'username')
+        session.connect('changed', changed, 'session')
+
         table.connect('destroy', destroyed)
         files.connect('toggled', toggled)
         return table
