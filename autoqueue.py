@@ -384,7 +384,7 @@ class AutoQueue(EventPlugin):
                 by_song, new_order, by="track")
         if new_order == old_order:
             return
-        self._songs = new_order
+        self._songs = deque(new_order)
         
     def enqueue(self, song):
         gtk.gdk.threads_enter()
@@ -425,7 +425,7 @@ class AutoQueue(EventPlugin):
         else:
             queue_songs = self.get_best_sample(
                 songs, self.desired_queue_length, by=by)
-        self._songs = queue_songs
+        self._songs = deque(queue_songs)
         return True
         
     def get_random_sample(self, songs, n):
