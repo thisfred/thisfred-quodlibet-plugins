@@ -85,15 +85,68 @@ def dictify(tups):
 def escape(foo):
     return foo.replace('"', '\\"')
 
-def cache(func):
-    cached = {}
-    def get_cached(*args):
-        if args in cached:
-            return cached[args]
-        result = func(*args)
-        cached[args] = result
-        return result
-    return get_cached
+class Cache(object):
+    def __init__(self):
+        self.cached = {}
+        self.c = 1000
+        self.p = 0
+        self.t1 = deque()
+        self.t2 = deque()
+        self.b1 = deque()
+        self.b2 = deque()
+
+    def replace(self, args):
+        if self.t1 and (
+            (args in self.b2 and len(self.t1) == self.p) or
+            (len(self.t1) > self.p)):
+            old = self.t1.pop()
+            self.b1.appendleft(old)
+        else:
+            old = self.t2.pop()
+            self.b2.appendleft(old)
+        del(self.cached[old])
+        
+    def __call__(self, func):
+        def wrapper(*orig_args):
+            args = orig_args[:]
+            if args in self.t1: 
+                self.t1.remove(args)
+                self.t2.appendleft(args)
+                return self.cached[args]
+            if args in self.t2: 
+                self.t2.remove(args)
+                self.t2.appendleft(args)
+                return self.cached[args]
+            result = func(*orig_args)
+            
+            self.cached[args] = result
+            if args in self.b1:
+                self.p = min(
+                    self.c, self.p + max(len(self.b2) / len(self.b1) , 1))
+                self.replace(args)
+                self.t2.appendleft(args)
+                return result            
+            if args in self.b2:
+                self.p = max(0, self.p - max(len(self.b1)/len(self.b2) , 1))
+                self.replace(args)
+                self.t2.appendleft(args)
+                return result
+            if len(self.t1) + len(self.b1) == self.c:
+                if len(self.t1) < self.c:
+                    self.b1.pop()
+                    self.replace(args)
+                else:
+                    del(self.cached[self.t1.pop()])
+            else:
+                total = len(self.t1) + len(self.b1) + len(
+                    self.t2) + len(self.b2)
+                if total >= self.c:
+                    if total == 2 * self.c:
+                        self.b2.pop()
+                    self.replace(args)
+            self.t1.appendleft(args)
+            return result
+        return wrapper
 
 class AutoQueue(EventPlugin):
     PLUGIN_ID = "AutoQueue"
@@ -604,7 +657,7 @@ class AutoQueue(EventPlugin):
             artists.append((name, match))
         return artists
 
-    @cache
+    @Cache()
     def get_artist(self, artist_name):
         cursor = self.connection.cursor()
         artist_name = artist_name.encode("UTF-8")
@@ -617,7 +670,7 @@ class AutoQueue(EventPlugin):
         cursor.execute("SELECT * FROM artists WHERE name = ?", (artist_name,))
         return cursor.fetchone()
 
-    @cache
+    @Cache()
     def get_track(self, artist_name, title):
         cursor = self.connection.cursor()
         title = title.encode("UTF-8")
@@ -698,7 +751,7 @@ class AutoQueue(EventPlugin):
         self._update_similar_tracks(track_id, similar_tracks)
         return similar_tracks + reverse_lookup
 
-    @cache
+    @Cache()
     def _get_artist_match(self, a1, a2):
         cursor = self.connection.cursor()
         cursor.execute(
@@ -709,7 +762,7 @@ class AutoQueue(EventPlugin):
         if not row: return 0
         return row[0]
 
-    @cache
+    @Cache()
     def _get_track_match(self, t1, t2):
         cursor = self.connection.cursor()
         cursor.execute(
