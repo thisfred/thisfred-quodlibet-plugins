@@ -27,11 +27,14 @@ from parse import Query
 from qltk import Frame
 from library import library
 import config
-import util
+
+# If you change a single character of code, I would ask that you get
+# your own (free) api key from last.fm.
+API_KEY = "09d0975a99a4cab235b731d31abf0057"
 
 TRACK_URL = "http://ws.audioscrobbler.com/1.0/track/%s/%s/similar.xml"
 ARTIST_URL = "http://ws.audioscrobbler.com/2.0/?method=artist.getsimilar" \
-             "&artist=%s&api_key=09d0975a99a4cab235b731d31abf0057"
+             "&artist=%s&api_key=" + API_KEY
 INT_SETTINGS = {
     'artist_block_time': {
         'value': 1,
@@ -82,6 +85,16 @@ def dictify(tups):
 def escape(foo):
     return foo.replace('"', '\\"')
 
+def cache(func):
+    cached = {}
+    def get_cached(*args):
+        if args in cached:
+            return cached[args]
+        result = func(*args)
+        cached[args] = result
+        return result
+    return get_cached
+
 class AutoQueue(EventPlugin):
     PLUGIN_ID = "AutoQueue"
     PLUGIN_NAME = _("Auto Queue")
@@ -102,17 +115,14 @@ class AutoQueue(EventPlugin):
         self.track_block_time = 30
         self.desired_queue_length = 5
         self.cache_time = 90
-
         self.cache = SQL and True
         self.include_rating = True
         self.by_tracks = True
         self.by_artists = True
         self.by_tags = True
         self.pick = "best"
-        self.cached_artist_ids = {}
-        self.cached_track_ids = {}
-
         self.blocked = False
+        self.verbose = False
         self.read_config()
         self.now = datetime.now()
         self.connection = None
@@ -148,7 +158,7 @@ class AutoQueue(EventPlugin):
     def log(self, msg):
         if not self.verbose: return
         print "[autoqueue]", msg
-        
+
     def read_config(self):
         for key, vdict in INT_SETTINGS.items():
             try:
@@ -372,7 +382,7 @@ class AutoQueue(EventPlugin):
         if not len(self._songs) > 1:
             return
         by_song = self.get_last_song()
-        new_order = old_order = self._songs[:]
+        new_order = old_order = deque(self._songs)
         if self.by_tags:
             new_order = self._reorder_queue_helper(
                 by_song, new_order, by="tag")
@@ -442,8 +452,7 @@ class AutoQueue(EventPlugin):
                 adds.append(song)
         return adds
 
-    def get_weighted_sample(
-        self, songs, n, by="track", queue_similarity=True):
+    def get_weighted_sample(self, songs, n, by="track"):
         total_weight, weighted_songs = self.get_weights(
             self.get_last_song(), songs, by=by)
         adds = []
@@ -591,19 +600,9 @@ class AutoQueue(EventPlugin):
             match = 0
             matchnode = node.getElementsByTagName("match")
             if matchnode:
-                    match = int(float(matchnode[0].firstChild.nodeValue) * 100)
+                match = int(float(matchnode[0].firstChild.nodeValue) * 100)
             artists.append((name, match))
         return artists
-
-    def cache(func):
-        cache = {}
-        def cached(*args):
-            if args in cache:
-                return cache[args]
-            result = func(*args)
-            cache[args] = result
-            return result
-        return cached
 
     @cache
     def get_artist(self, artist_name):
@@ -699,6 +698,7 @@ class AutoQueue(EventPlugin):
         self._update_similar_tracks(track_id, similar_tracks)
         return similar_tracks + reverse_lookup
 
+    @cache
     def _get_artist_match(self, a1, a2):
         cursor = self.connection.cursor()
         cursor.execute(
@@ -709,6 +709,7 @@ class AutoQueue(EventPlugin):
         if not row: return 0
         return row[0]
 
+    @cache
     def _get_track_match(self, t1, t2):
         cursor = self.connection.cursor()
         cursor.execute(
