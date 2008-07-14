@@ -43,7 +43,7 @@ INT_SETTINGS = {
         'value': 90,
         'label': 'block track (days)'},
     'desired_queue_length': {
-        'value': 4400,
+        'value': 4440,
         'label': 'queue (seconds)'},
     'cache_time': {
         'value': 90,
@@ -86,9 +86,27 @@ def escape(foo):
     return foo.replace('"', '\\"')
 
 class Cache(object):
-    def __init__(self):
+    """
+    >>> dec_cache = Cache(10)
+    >>> @dec_cache
+    ... def identity(f):
+    ...     pass
+    >>> dummy = [identity(x) for x in range(20) + range(11,15) + range(20) +
+    ... range(11,40) + [39, 38, 37, 36, 35, 34, 33, 32, 16, 17, 11, 41]] 
+    >>> dec_cache.t1
+    deque([(41,)])
+    >>> dec_cache.t2
+    deque([(11,), (17,), (16,), (32,), (33,), (34,), (35,), (36,), (37,)])
+    >>> dec_cache.b1
+    deque([(31,), (30,)])
+    >>> dec_cache.b2
+    deque([(38,), (39,), (19,), (18,), (15,), (14,), (13,), (12,)])
+    >>> dec_cache.p
+    5
+    """
+    def __init__(self, size):
         self.cached = {}
-        self.c = 1000
+        self.c = size
         self.p = 0
         self.t1 = deque()
         self.t2 = deque()
@@ -118,18 +136,25 @@ class Cache(object):
                 self.t2.appendleft(args)
                 return self.cached[args]
             result = func(*orig_args)
-            
             self.cached[args] = result
             if args in self.b1:
                 self.p = min(
                     self.c, self.p + max(len(self.b2) / len(self.b1) , 1))
                 self.replace(args)
+                self.b1.remove(args)
                 self.t2.appendleft(args)
+                # print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
+                #     repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
+                #     len(self.b2), self.p)
                 return result            
             if args in self.b2:
                 self.p = max(0, self.p - max(len(self.b1)/len(self.b2) , 1))
                 self.replace(args)
+                self.b2.remove(args)
                 self.t2.appendleft(args)
+                # print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
+                #    repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
+                #    len(self.b2), self.p)
                 return result
             if len(self.t1) + len(self.b1) == self.c:
                 if len(self.t1) < self.c:
@@ -141,7 +166,7 @@ class Cache(object):
                 total = len(self.t1) + len(self.b1) + len(
                     self.t2) + len(self.b2)
                 if total >= self.c:
-                    if total == 2 * self.c:
+                    if total == (2 * self.c):
                         self.b2.pop()
                     self.replace(args)
             self.t1.appendleft(args)
@@ -306,7 +331,7 @@ class AutoQueue(EventPlugin):
     def add_to_queue(self):
         self.blocked = True
         self.connection = sqlite3.connect(self.DB)
-        if self.desired_queue_length >= 0 and not self.need_songs():
+        if not self.need_songs():
             self.blocked = False
             return
         while self.need_songs():
@@ -383,7 +408,12 @@ class AutoQueue(EventPlugin):
                         continue
             if self._songs:
                 self.reorder_songs()
-                self.enqueue(self._songs.popleft())
+                song = None
+                while self._songs:
+                    song = self._songs.popleft()
+                    if not self.is_blocked(song.comma("artist").lower()):
+                        self.enqueue(song)
+                        break
         self.blocked = False
        
     def block_artist(self, artist_name):
@@ -481,14 +511,17 @@ class AutoQueue(EventPlugin):
             return False
         if self.pick =="random":
             queue_songs = self.get_random_sample(
-                songs, self.desired_queue_length)
+                songs, 2)
         elif self.pick == "weighted":
             queue_songs = self.get_weighted_sample(
-                songs, self.desired_queue_length, by=by)
+                songs, 2, by=by)
         else:
             queue_songs = self.get_best_sample(
-                songs, self.desired_queue_length, by=by)
-        self._songs = deque(queue_songs)
+                songs, 2, by=by)
+        for song in reversed(queue_songs):
+            self._songs.appendleft(song)
+        while len(self._songs) > 10:
+            self._songs.pop()
         return True
         
     def get_random_sample(self, songs, n):
@@ -531,7 +564,7 @@ class AutoQueue(EventPlugin):
         weighted_songs.sort()
         adds = []
         while n and weighted_songs:
-            song = weighted_songs.pop()[2]
+            weight, order, song = weighted_songs.pop()
             artist = song.comma("artist").lower()
             if self.is_blocked(artist) or artist in [
                 add.comma("artist").lower() for add in adds]:
@@ -570,7 +603,7 @@ class AutoQueue(EventPlugin):
                 artist_name, title, q_artist_name, q_title)
         if by == "tag":
             return self.get_tag_match(song.list("tag"), by_song.list("tag"))
-        match = self.similar_artists.get((artist_name), 0)
+        match = self.similar_artists.get((artist_name,), 0)
         if match:
             return match
         return self.get_artist_match(artist_name, q_artist_name)
@@ -657,7 +690,7 @@ class AutoQueue(EventPlugin):
             artists.append((name, match))
         return artists
 
-    @Cache()
+    @Cache(1000)
     def get_artist(self, artist_name):
         cursor = self.connection.cursor()
         artist_name = artist_name.encode("UTF-8")
@@ -670,7 +703,7 @@ class AutoQueue(EventPlugin):
         cursor.execute("SELECT * FROM artists WHERE name = ?", (artist_name,))
         return cursor.fetchone()
 
-    @Cache()
+    @Cache(2000)
     def get_track(self, artist_name, title):
         cursor = self.connection.cursor()
         title = title.encode("UTF-8")
@@ -751,7 +784,6 @@ class AutoQueue(EventPlugin):
         self._update_similar_tracks(track_id, similar_tracks)
         return similar_tracks + reverse_lookup
 
-    @Cache()
     def _get_artist_match(self, a1, a2):
         cursor = self.connection.cursor()
         cursor.execute(
@@ -762,7 +794,6 @@ class AutoQueue(EventPlugin):
         if not row: return 0
         return row[0]
 
-    @Cache()
     def _get_track_match(self, t1, t2):
         cursor = self.connection.cursor()
         cursor.execute(
