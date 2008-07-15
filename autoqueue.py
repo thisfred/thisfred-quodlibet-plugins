@@ -143,18 +143,18 @@ class Cache(object):
                 self.replace(args)
                 self.b1.remove(args)
                 self.t2.appendleft(args)
-                # print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
-                #     repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
-                #     len(self.b2), self.p)
+                print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
+                    repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
+                    len(self.b2), self.p)
                 return result            
             if args in self.b2:
                 self.p = max(0, self.p - max(len(self.b1)/len(self.b2) , 1))
                 self.replace(args)
                 self.b2.remove(args)
                 self.t2.appendleft(args)
-                # print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
-                #    repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
-                #    len(self.b2), self.p)
+                print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
+                   repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
+                   len(self.b2), self.p)
                 return result
             if len(self.t1) + len(self.b1) == self.c:
                 if len(self.t1) < self.c:
@@ -318,6 +318,15 @@ class AutoQueue(EventPlugin):
         # played for a determined number of days
         self.block_artist(artist_name)
         if self.blocked:
+            if len(main.playlist.q) == 0:
+                if self._songs:
+                    self.reorder_songs()
+                    song = None
+                    while self._songs:
+                        song = self._songs.popleft()
+                        if not self.is_blocked(song.comma("artist").lower()):
+                            self.enqueue(song)
+                            break
             return
         bg = threading.Thread(None, self.add_to_queue) 
         bg.setDaemon(True)
@@ -511,17 +520,29 @@ class AutoQueue(EventPlugin):
             return False
         if self.pick =="random":
             queue_songs = self.get_random_sample(
-                songs, 2)
+                songs, 3)
         elif self.pick == "weighted":
             queue_songs = self.get_weighted_sample(
-                songs, 2, by=by)
+                songs, 3, by=by)
         else:
             queue_songs = self.get_best_sample(
-                songs, 2, by=by)
+                songs, 3, by=by)
         for song in reversed(queue_songs):
-            self._songs.appendleft(song)
-        while len(self._songs) > 10:
-            self._songs.pop()
+            if not song in self._songs:
+                self._songs.appendleft(song)
+        new = deque()
+        for song in self._songs:
+            if not self.is_blocked(song.comma("artist").lower()):
+                new.append(song)
+        while len(new) > 10:
+            new.pop()
+        if new:
+            self.log("%s backup songs: \n%s" % (
+                len(new) - 1,
+                "\n".join(["%s - %s" % (
+                song.comma("artist"),
+                song.comma("title")) for song in list(new)[1:]])))
+        self._songs = new
         return True
         
     def get_random_sample(self, songs, n):
@@ -703,7 +724,7 @@ class AutoQueue(EventPlugin):
         cursor.execute("SELECT * FROM artists WHERE name = ?", (artist_name,))
         return cursor.fetchone()
 
-    @Cache(2000)
+    @Cache(1000)
     def get_track(self, artist_name, title):
         cursor = self.connection.cursor()
         title = title.encode("UTF-8")
@@ -784,6 +805,7 @@ class AutoQueue(EventPlugin):
         self._update_similar_tracks(track_id, similar_tracks)
         return similar_tracks + reverse_lookup
 
+    @Cache(1000)
     def _get_artist_match(self, a1, a2):
         cursor = self.connection.cursor()
         cursor.execute(
@@ -794,6 +816,7 @@ class AutoQueue(EventPlugin):
         if not row: return 0
         return row[0]
 
+    @Cache(1000)
     def _get_track_match(self, t1, t2):
         cursor = self.connection.cursor()
         cursor.execute(
