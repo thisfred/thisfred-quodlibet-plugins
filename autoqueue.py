@@ -318,15 +318,6 @@ class AutoQueue(EventPlugin):
         # played for a determined number of days
         self.block_artist(artist_name)
         if self.blocked:
-            if len(main.playlist.q) == 0:
-                if self._songs:
-                    self.reorder_songs()
-                    song = None
-                    while self._songs:
-                        song = self._songs.popleft()
-                        if not self.is_blocked(song.comma("artist").lower()):
-                            self.enqueue(song)
-                            break
             return
         bg = threading.Thread(None, self.add_to_queue) 
         bg.setDaemon(True)
