@@ -143,18 +143,18 @@ class Cache(object):
                 self.replace(args)
                 self.b1.remove(args)
                 self.t2.appendleft(args)
-                print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
-                    repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
-                    len(self.b2), self.p)
+                #print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
+                #    repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
+                #    len(self.b2), self.p)
                 return result            
             if args in self.b2:
                 self.p = max(0, self.p - max(len(self.b1)/len(self.b2) , 1))
                 self.replace(args)
                 self.b2.remove(args)
                 self.t2.appendleft(args)
-                print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
-                   repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
-                   len(self.b2), self.p)
+                #print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
+                #   repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
+                #   len(self.b2), self.p)
                 return result
             if len(self.t1) + len(self.b1) == self.c:
                 if len(self.t1) < self.c:
