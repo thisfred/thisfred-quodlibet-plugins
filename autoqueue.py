@@ -319,9 +319,10 @@ class AutoQueue(EventPlugin):
         self.block_artist(artist_name)
         if self.blocked:
             return
-        bg = threading.Thread(None, self.add_to_queue) 
-        bg.setDaemon(True)
-        bg.start()
+        if self.need_songs():
+            bg = threading.Thread(None, self.add_to_queue) 
+            bg.setDaemon(True)
+            bg.start()
 
     def need_songs(self):
         model = main.playlist.q.get()
@@ -331,9 +332,6 @@ class AutoQueue(EventPlugin):
     def add_to_queue(self):
         self.blocked = True
         self.connection = sqlite3.connect(self.DB)
-        if not self.need_songs():
-            self.blocked = False
-            return
         while self.need_songs():
             self.unblock_artists()
             if self.by_tracks:
