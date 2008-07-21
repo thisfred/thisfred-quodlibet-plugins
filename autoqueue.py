@@ -539,7 +539,7 @@ class AutoQueue(EventPlugin):
     def get_random_sample(self, songs, n):
         adds = []
         while n and songs:
-            sample = random.sample(songs, n)
+            sample = random.sample(songs, min(len(songs),n))
             for song in sample:
                 songs.remove(song)
                 artist = song.comma("artist").lower()
