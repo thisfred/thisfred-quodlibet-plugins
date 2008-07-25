@@ -70,9 +70,16 @@ BOOL_SETTINGS = {
         'label': 'log to console'},}
 
 STR_SETTINGS = {
-    'pick': {
+    'pick':{
         'value': 'best',
-        'label': 'pick method'},}
+        'label': 'pick method'},
+    'restrictors' : {
+        'value': '',
+        'label': 'restrict'},
+    'relaxors' : {
+        'value': '',
+        'label': 'relax'},
+    }
 
 def dictify(tups):
     dictified = {}
@@ -103,6 +110,12 @@ class Cache(object):
     deque([(38,), (39,), (19,), (18,), (15,), (14,), (13,), (12,)])
     >>> dec_cache.p
     5
+    >>> identity(41)
+    41
+    >>> identity(32)
+    32
+    >>> identity(16)
+    16
     """
     def __init__(self, size):
         self.cached = {}
@@ -143,18 +156,18 @@ class Cache(object):
                 self.replace(args)
                 self.b1.remove(args)
                 self.t2.appendleft(args)
-                #print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
-                #    repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
-                #    len(self.b2), self.p)
+                print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
+                    repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
+                    len(self.b2), self.p)
                 return result            
             if args in self.b2:
                 self.p = max(0, self.p - max(len(self.b1)/len(self.b2) , 1))
                 self.replace(args)
                 self.b2.remove(args)
                 self.t2.appendleft(args)
-                #print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
-                #   repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
-                #   len(self.b2), self.p)
+                print "%s:: t1:%s b1:%s t2:%s b2:%s p:%s" % (
+                   repr(func)[10:30], len(self.t1),len(self.b1),len(self.t2),
+                   len(self.b2), self.p)
                 return result
             if len(self.t1) + len(self.b1) == self.c:
                 if len(self.t1) < self.c:
@@ -210,6 +223,8 @@ class AutoQueue(EventPlugin):
         self.similar_tracks = {}
         self._blocked_artists = deque([])
         self._blocked_artists_times = deque([])
+        self.relaxors = ''
+        self.restrictors = ''
         try:
             pickle = open(self.DUMP, 'r')
             try:
@@ -334,6 +349,11 @@ class AutoQueue(EventPlugin):
         self.connection = sqlite3.connect(self.DB)
         while self.need_songs():
             self.unblock_artists()
+            restrictions = "#(laststarted > %s days)" % self.track_block_time
+            if self.restrictors:
+                restrictions = "&(%s, %s)" % (restrictions, self.restrictors)
+            if self.relaxors:
+                restrictions = "|(%s, %s)" % (restrictions, self.relaxors)
             if self.by_tracks:
                 similar_tracks = self.get_cached_similar_tracks()
                 search_tracks = []
@@ -355,8 +375,7 @@ class AutoQueue(EventPlugin):
                     search_tracks += version_tracks
                 if search_tracks:
                     search = "&(|(%s),%s)" % (
-                        ",".join(search_tracks),
-                        "#(laststarted > %s days)" % self.track_block_time)
+                        ",".join(search_tracks), restrictions)
                     self.similar_tracks = dictify(similar_tracks)
                     if self.pick_songs(search,  by="track"):
                         self.enqueue(self._songs.popleft())
@@ -371,8 +390,7 @@ class AutoQueue(EventPlugin):
                     if not self.is_blocked(artist[0])]
                 if search_artists:
                     search = "&(|(%s),%s)" % (
-                        ",".join(search_artists),
-                        "#(laststarted > %s days)" % self.track_block_time)
+                        ",".join(search_artists), restrictions)
                     self.similar_artists = dictify(similar_artists)
                     if self.pick_songs(search, by="artist"):
                         self.enqueue(self._songs.popleft())
@@ -398,9 +416,7 @@ class AutoQueue(EventPlugin):
                             'tag = "artist:%s"' % stripped,
                             'tag = "album:%s"' % stripped])
                     search = "&(|(%s),%s,%s)" % (
-                        ",".join(search_tags),
-                        exclude_artists,
-                        "#(laststarted > %s days)" % self.track_block_time)
+                        ",".join(search_tags), exclude_artists, restrictions)
                     if self.pick_songs(search, by="tag"):
                         self.enqueue(self._songs.popleft())
                         continue
@@ -412,6 +428,9 @@ class AutoQueue(EventPlugin):
                     if not self.is_blocked(song.comma("artist").lower()):
                         self.enqueue(song)
                         break
+                continue
+            self.blocked = False
+            return
         self.blocked = False
        
     def block_artist(self, artist_name):
@@ -618,6 +637,7 @@ class AutoQueue(EventPlugin):
             return match
         return self.get_artist_match(artist_name, q_artist_name)
 
+    @Cache(1000)
     def get_track_match(self, a1, t1, a2, t2):
         id1 = self.get_track(a1,t1)[0]
         id2 = self.get_track(a2,t2)[0]
@@ -625,6 +645,7 @@ class AutoQueue(EventPlugin):
             self._get_track_match(id1, id2),
             self._get_track_match(id2, id1))
 
+    @Cache(1000)
     def get_artist_match(self, a1, a2):
         id1 = self.get_artist(a1)[0]
         id2 = self.get_artist(a2)[0]
@@ -636,7 +657,7 @@ class AutoQueue(EventPlugin):
         t1 = list(set([tag.split(":")[-1] for tag in tags1]))
         t2 = list(set([tag.split(":")[-1] for tag in tags2]))
         return len([tag for tag in t2 if tag in t1])
-        
+
     def get_similar_tracks(self):
         artist_name, title = self.get_artist_and_title(self.get_last_song())
         self.log("Getting similar tracks from last.fm for: %s - %s" % (
@@ -713,7 +734,7 @@ class AutoQueue(EventPlugin):
         cursor.execute("SELECT * FROM artists WHERE name = ?", (artist_name,))
         return cursor.fetchone()
 
-    @Cache(1000)
+    @Cache(2000)
     def get_track(self, artist_name, title):
         cursor = self.connection.cursor()
         title = title.encode("UTF-8")
@@ -794,7 +815,6 @@ class AutoQueue(EventPlugin):
         self._update_similar_tracks(track_id, similar_tracks)
         return similar_tracks + reverse_lookup
 
-    @Cache(1000)
     def _get_artist_match(self, a1, a2):
         cursor = self.connection.cursor()
         cursor.execute(
@@ -805,7 +825,6 @@ class AutoQueue(EventPlugin):
         if not row: return 0
         return row[0]
 
-    @Cache(1000)
     def _get_track_match(self, t1, t2):
         cursor = self.connection.cursor()
         cursor.execute(
