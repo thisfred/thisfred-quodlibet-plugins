@@ -348,10 +348,10 @@ class AutoQueue(EventPlugin):
         while self.need_songs():
             self.unblock_artists()
             restrictions = "#(laststarted > %s days)" % self.track_block_time
-            if self.restrictors:
-                restrictions = "&(%s, %s)" % (restrictions, self.restrictors)
             if self.relaxors:
                 restrictions = "|(%s, %s)" % (restrictions, self.relaxors)
+            if self.restrictors:
+                restrictions = "&(%s, %s)" % (restrictions, self.restrictors)
             if self.by_tracks:
                 similar_tracks = self.get_cached_similar_tracks()
                 search_tracks = []
