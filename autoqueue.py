@@ -190,8 +190,6 @@ class AutoQueue(EventPlugin):
     PLUGIN_ID = "AutoQueue"
     PLUGIN_NAME = _("Auto Queue")
     PLUGIN_VERSION = "0.1"
-    PLUGIN_DESC = ("Automatically queue new tracks that are similar to "
-                   "the track being played.")
     try: DUMP = os.path.join(const.USERDIR, "autoqueue_block_cache")
     except AttributeError:
         DUMP = os.path.join(const.DIR, "autoqueue_block_cache")
