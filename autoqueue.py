@@ -343,12 +343,9 @@ class AutoQueue(EventPlugin):
   
     def song_generator(self):
         restrictions = "#(laststarted > %s days)" % self.track_block_time
-        print repr(self.relaxors)
         if self.relaxors:
-            print "relaxing"
             restrictions = "|(%s, %s)" % (restrictions, self.relaxors)
         if self.restrictors:
-            print "restricting"
             restrictions = "&(%s, %s)" % (restrictions, self.restrictors)
         if self.by_tracks:
             for match, artist, title in self.get_sorted_similar_tracks():
