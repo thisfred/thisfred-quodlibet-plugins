@@ -437,6 +437,9 @@ class AutoQueue(EventPlugin):
                 continue
             if song in self._songs:
                 continue
+            self._songs = deque([
+                bsong for bsong in list(self._songs) if not
+                self.is_blocked(bsong.comma("artist").lower())])
             self._songs.appendleft(song)
             if len(self._songs) > 10:
                 self._songs.pop()
