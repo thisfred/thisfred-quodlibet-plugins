@@ -268,7 +268,6 @@ class AutoQueue(EventPlugin):
             try:
                 setattr(
                     self, key, config.get("plugins", "autoqueue_%s" % key))
-                print "set %s to %s" % (key, config.get("plugins", "autoqueue_%s" % key))
             except:
                 setattr(self, key, vdict['value'])
                 config.set("plugins", "autoqueue_%s" % key, vdict['value'])
