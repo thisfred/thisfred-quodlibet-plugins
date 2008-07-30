@@ -443,10 +443,10 @@ class AutoQueue(EventPlugin):
                 self._songs.pop()
             if self._songs:
                 self.log("%s backup songs: \n%s" % (
-                    len(self._songs) - 1,
+                    len(self._songs),
                     "\n".join(["%s - %s" % (
                     song.comma("artist"),
-                    song.comma("title")) for song in list(self._songs)[1:]])))
+                    song.comma("title")) for song in list(self._songs)])))
         self.blocked = False
        
     def block_artist(self, artist_name):
