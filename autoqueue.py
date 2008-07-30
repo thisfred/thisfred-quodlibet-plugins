@@ -363,8 +363,9 @@ class AutoQueue(EventPlugin):
                     search = "|(%s, %s)" % (search, version)
                 if search:
                     search = "&(%s, %s)" % (search, restrictions)
-                for song in self.search(search):
-                    yield song
+                songs = self.search(search)
+                if songs:
+                    yield songs[0]
         if self.by_artists:
             for match, artist in self.get_sorted_similar_artists():
                 self.log("looking for: %s, %s" % (match, artist))
@@ -372,8 +373,9 @@ class AutoQueue(EventPlugin):
                     continue
                 search = 'artist = "%s"' % escape(artist)
                 search = "&(%s, %s)" % (search, restrictions)
-                for song in self.search(search):
-                    yield song
+                songs = self.search(search)
+                if songs:
+                    yield songs[0]
         if self.by_tags:
             tags = self.get_last_song().list("tag")
             exclude_artists = "&(%s)" % ",".join([
