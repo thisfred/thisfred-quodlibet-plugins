@@ -528,7 +528,8 @@ class AutoQueue(EventPlugin):
             "artist"), song.comma("title"))
             for score, i, song in weighted_songs])))
         return [w_song[2] for w_song in weighted_songs]
-            
+
+    @Cache(2000)
     def search(self, search):
         try:
             myfilter = Query(search).search
