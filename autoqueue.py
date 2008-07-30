@@ -364,7 +364,7 @@ class AutoQueue(EventPlugin):
                     search = "&(%s, %s)" % (search, restrictions)
                 songs = self.search(search)
                 if songs:
-                    yield songs[0]
+                    yield random.choice(songs)
         if self.by_artists:
             for match, artist in self.get_sorted_similar_artists():
                 if self.is_blocked(artist):
@@ -374,7 +374,7 @@ class AutoQueue(EventPlugin):
                 search = "&(%s, %s)" % (search, restrictions)
                 songs = self.search(search)
                 if songs:
-                    yield songs[0]
+                    yield random.choice(songs)
         if self.by_tags:
             tags = self.get_last_song().list("tag")
             exclude_artists = "&(%s)" % ",".join([
