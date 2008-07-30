@@ -348,9 +348,9 @@ class AutoQueue(EventPlugin):
             restrictions = "&(%s, %s)" % (restrictions, self.restrictors)
         if self.by_tracks:
             for match, artist, title in self.get_sorted_similar_tracks():
-                self.log("looking for: %s, %s, %s" % (match, artist, title))
                 if self.is_blocked(artist):
                     continue
+                self.log("looking for: %s, %s, %s" % (match, artist, title))
                 search = '&(artist = "%s", title = "%s")' % (
                     escape(artist), escape(title))
                 version = ""
@@ -367,9 +367,9 @@ class AutoQueue(EventPlugin):
                     yield songs[0]
         if self.by_artists:
             for match, artist in self.get_sorted_similar_artists():
-                self.log("looking for: %s, %s" % (match, artist))
                 if self.is_blocked(artist):
                     continue
+                self.log("looking for: %s, %s" % (match, artist))
                 search = 'artist = "%s"' % escape(artist)
                 search = "&(%s, %s)" % (search, restrictions)
                 songs = self.search(search)
