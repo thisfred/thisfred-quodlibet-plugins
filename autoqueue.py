@@ -1,10 +1,10 @@
-# AutoQueue: an automatic queueing plugin for Quod Libet.
-# version 0.1
-# Copyright 2007 Eric Casteleijn <thisfred@gmail.com>
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License version 2 as
-# published by the Free Software Foundation
+""" AutoQueue: an automatic queueing plugin for Quod Libet.
+version 0.1
+Copyright 2007 Eric Casteleijn <thisfred@gmail.com>
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License version 2 as
+published by the Free Software Foundation"""
 
 from collections import deque
 from datetime import datetime, timedelta
@@ -79,6 +79,8 @@ STR_SETTINGS = {
     }
 
 def dictify(tups):
+    """turn a list of n-tuples into a dict with a n-1-tuple as a key
+    and the last item of the tuple as value""" 
     dictified = {}
     for tup in tups:
         key = tuple([item for item in tup][:-1])
@@ -86,8 +88,52 @@ def dictify(tups):
         dictified[key] = value
     return dictified
 
-def escape(foo):
-    return foo.replace('"', '\\"')
+def escape(the_string):
+    """double escape quotes"""
+    return the_string.replace('"', '\\"')
+
+def construct_track_search(artist, title, restrictions):
+    """construct a QL search string that looks for songs with this
+    artist and title"""
+    search = '&(artist = "%s", title = "%s")' % (
+        escape(artist), escape(title))
+    version = ""
+    if "(" in title:
+        version = '&(artist = "%s", title = "%s")' % (
+            escape(artist),
+            escape("(".join(title.split("(")[:-1]).strip()))
+    if version:
+        search = "|(%s, %s)" % (search, version)
+    if search:
+        search = "&(%s, %s)" % (search, restrictions)
+    return search
+
+def construct_tag_search(tags, exclude_artists, restrictions):
+    """construct a QL search string that looks for songs with these
+    tags"""
+    search = ''
+    search_tags = []
+    for tag in tags:
+        if tag.startswith("artist:") or tag.startswith(
+            "album:"):
+            stripped = ":".join(tag.split(":")[1:])
+        else:
+            stripped = tag
+        stripped = escape(stripped)
+        search_tags.extend([
+            'tag = "%s"' % stripped,
+            'tag = "artist:%s"' % stripped,
+            'tag = "album:%s"' % stripped])
+    search = "&(|(%s),%s,%s)" % (
+        ",".join(search_tags), exclude_artists, restrictions)
+    return search
+
+def construct_artist_search(artist, restrictions):
+    """construct a QL search string that looks for songs with this
+    artist"""
+    search = 'artist = "%s"' % escape(artist)
+    search = "&(%s, %s)" % (search, restrictions)
+    return search
 
 class Cache(object):
     """
@@ -185,13 +231,16 @@ class Cache(object):
 
 
 class AutoQueue(EventPlugin):
+    """The actual plugin class"""
     PLUGIN_ID = "AutoQueue"
     PLUGIN_NAME = _("Auto Queue")
     PLUGIN_VERSION = "0.1"
-    try: DUMP = os.path.join(const.USERDIR, "autoqueue_block_cache")
+    try:
+        DUMP = os.path.join(const.USERDIR, "autoqueue_block_cache")
     except AttributeError:
         DUMP = os.path.join(const.DIR, "autoqueue_block_cache")
-    try: DB = os.path.join(const.USERDIR, "similarity.db")
+    try:
+        DB = os.path.join(const.USERDIR, "similarity.db")
     except AttributeError:
         DB = os.path.join(const.DIR, "similarity.db")
         
@@ -245,10 +294,13 @@ class AutoQueue(EventPlugin):
         gtk.quit_add(0, self.dump_stuff)
 
     def log(self, msg):
-        if not self.verbose: return
+        """print debug messages"""
+        if not self.verbose:
+            return
         print "[autoqueue]", msg
 
     def read_config(self):
+        """Initialize user settings from the config file"""
         for key, vdict in INT_SETTINGS.items():
             try:
                 setattr(self, key, config.getint(
@@ -299,7 +351,8 @@ class AutoQueue(EventPlugin):
             os.remove(self.DUMP)
         except OSError:
             pass
-        if len(self._blocked_artists) == 0: return 0
+        if len(self._blocked_artists) == 0:
+            return 0
         pickle = open(self.DUMP, 'w')
         try:
             pickler = Pickler(pickle, -1)
@@ -310,14 +363,18 @@ class AutoQueue(EventPlugin):
         return 0
 
     def enabled(self):
+        """user enabled the plugin"""
         self.log("enabled")
         self.__enabled = True
 
     def disabled(self):
+        """user disabled the plugin"""
         self.log("disabled")
         self.__enabled = False
 
     def plugin_on_song_started(self, song):
+        """Triggered when a song start. If the right conditions apply,
+        we start looking for new songs to queue."""
         if song is None:
             return
         self.now = datetime.now()
@@ -331,16 +388,19 @@ class AutoQueue(EventPlugin):
         if self.blocked:
             return
         if self.queue_needs_songs():
-            bg = threading.Thread(None, self.add_to_queue) 
-            bg.setDaemon(True)
-            bg.start()
+            background = threading.Thread(None, self.add_to_queue) 
+            background.setDaemon(True)
+            background.start()
 
     def queue_needs_songs(self):
+        """determine whether the queue needs more songs added"""
         model = main.playlist.q.get()
         time = sum([row.get("~#length", 0) for row in model])
         return time < self.desired_queue_length
-  
+
+      
     def song_generator(self):
+        """yield songs that match the last song in the queue"""
         restrictions = "#(laststarted > %s days)" % self.track_block_time
         if self.relaxors:
             restrictions = "|(%s, %s)" % (restrictions, self.relaxors)
@@ -351,17 +411,7 @@ class AutoQueue(EventPlugin):
                 if self.is_blocked(artist):
                     continue
                 self.log("looking for: %s, %s, %s" % (match, artist, title))
-                search = '&(artist = "%s", title = "%s")' % (
-                    escape(artist), escape(title))
-                version = ""
-                if "(" in title:
-                    version = '&(artist = "%s", title = "%s")' % (
-                        escape(artist),
-                        escape("(".join(title.split("(")[:-1]).strip()))
-                if version:
-                    search = "|(%s, %s)" % (search, version)
-                if search:
-                    search = "&(%s, %s)" % (search, restrictions)
+                search = construct_track_search(artist, title, restrictions)
                 songs = self.search(search)
                 if songs:
                     yield random.choice(songs)
@@ -370,8 +420,7 @@ class AutoQueue(EventPlugin):
                 if self.is_blocked(artist):
                     continue
                 self.log("looking for: %s, %s" % (match, artist))
-                search = 'artist = "%s"' % escape(artist)
-                search = "&(%s, %s)" % (search, restrictions)
+                search = construct_artist_search(artist, restrictions)
                 songs = self.search(search)
                 if songs:
                     yield random.choice(songs)
@@ -382,26 +431,14 @@ class AutoQueue(EventPlugin):
                 escape(artist) for artist in self.get_blocked_artists()])
             if tags:
                 self.log("Searching for tags: %s" % tags)
-                search = ''
-                search_tags = []
-                for tag in tags:
-                    if tag.startswith("artist:") or tag.startswith(
-                        "album:"):
-                        stripped = ":".join(tag.split(":")[1:])
-                    else:
-                        stripped = tag
-                    stripped = escape(stripped)
-                    search_tags.extend([
-                        'tag = "%s"' % stripped,
-                        'tag = "artist:%s"' % stripped,
-                        'tag = "album:%s"' % stripped])
-                search = "&(|(%s),%s,%s)" % (
-                    ",".join(search_tags), exclude_artists, restrictions)
+                search = construct_tag_search(
+                    tags, exclude_artists, restrictions)
                 for song in self.search(search):
                     yield song
         return
         
     def add_to_queue(self):
+        """search for appropriate songs and put them in the queue"""
         self.blocked = True
         self.connection = sqlite3.connect(self.DB)
         if len(self._songs) >= 10:
@@ -409,13 +446,11 @@ class AutoQueue(EventPlugin):
         while self.queue_needs_songs():
             self.unblock_artists()
             generator = self.song_generator()
-            songs = deque()
             song = None
             try:
                 song = generator.next()
             except StopIteration:
                 if self._songs:
-                    self.reorder_songs()
                     song = self._songs.popleft()
                     while self.is_blocked(
                         song.comma("artist").lower()) and self._songs:
@@ -472,7 +507,7 @@ class AutoQueue(EventPlugin):
         pickler.dump(to_dump)
 
     def unblock_artists(self):
-        """ release blocked artists when they've been in the penalty
+        """release blocked artists when they've been in the penalty
         box for long enough
         """
         while self._blocked_artists_times:
@@ -484,6 +519,7 @@ class AutoQueue(EventPlugin):
                 self._blocked_artists_times.popleft()))
 
     def is_blocked(self, artist_name):
+        """check if the artist was played too recently"""
         return artist_name in self.get_blocked_artists()
 
     def get_blocked_artists(self):
@@ -496,39 +532,9 @@ class AutoQueue(EventPlugin):
             return main.playlist.q.get()[-1]
         return self.song
 
-    def reorder_songs(self):
-        if not len(self._songs) > 1:
-            return
-        by_song = self.get_last_song()
-        new_order = old_order = deque(self._songs)
-        if self.by_tags:
-            new_order = self._reorder_queue_helper(
-                by_song, new_order, by="tag")
-        if self.by_artists:
-            new_order = self._reorder_queue_helper(
-                by_song, new_order, by="artist")
-        if self.by_tracks:
-            new_order = self._reorder_queue_helper(
-                by_song, new_order, by="track")
-        if new_order == old_order:
-            return
-        self._songs = deque(new_order)
-        
     def enqueue(self, song):
         self._songs.appendleft(song)
         
-    def _reorder_queue_helper(self, song, songs, by="track"):
-        tw, weighted_songs = self.get_weights(song, songs, by=by)
-        if tw == 0:
-            self.log("already sorted by %s" % by)
-            return songs
-        weighted_songs.sort(reverse=True)
-        self.log("sorted by %s: \n%s" % (by, "\n".join(["%05d %03d %s - %s" % (
-            score, len(weighted_songs) + 1 - i, song.comma(
-            "artist"), song.comma("title"))
-            for score, i, song in weighted_songs])))
-        return [w_song[2] for w_song in weighted_songs]
-
     @Cache(2000)
     def search(self, search):
         try:
@@ -539,18 +545,6 @@ class AutoQueue(EventPlugin):
             return []
         return songs
     
-    def get_weights(self, by_song, for_songs, by="track"):
-        weighted_songs = []
-        total_weight = 0
-        len_songs = len(for_songs)
-        for i, song in enumerate(for_songs):
-            weight = self.get_match(by_song, song, by=by)
-            if self.include_rating:
-                weight = int(weight * song["~#rating"])
-            weighted_songs.append((weight, len_songs - i, song))
-            total_weight += weight
-        return total_weight, weighted_songs
-        
     def get_artist_and_title(self, song):
         title = song.comma("title").lower()
         if "version" in song:
