@@ -480,8 +480,8 @@ class AutoQueue(EventPlugin):
                     self.log("%s backup songs: \n%s" % (
                         len(self._songs),
                         "\n".join(["%s - %s" % (
-                        song.comma("artist"),
-                        song.comma("title")) for song in list(self._songs)])))
+                        bsong.comma("artist"),
+                        bsong.comma("title")) for bsong in list(self._songs)])))
             if song:
                 gtk.gdk.threads_enter()
                 main.playlist.enqueue([song])
@@ -689,7 +689,7 @@ class AutoQueue(EventPlugin):
 
     def get_sorted_similar_artists(self):
         if not self.cache:
-            return sorted(self.get_similar_artists(), reverse=True)
+            return sorted(list(set(self.get_similar_artists())), reverse=True)
         artist = self.get_artist(self.get_last_song().comma("artist").lower())
         artist_id, updated = artist[0], artist[2]
         cursor = self.connection.cursor()
@@ -712,14 +712,15 @@ class AutoQueue(EventPlugin):
                     " artists ON artist_2_artist.artist2 = artists.id WHERE"
                     " artist_2_artist.artist1 = ?",
                     (artist_id,))
-                return sorted(cursor.fetchall() + reverse_lookup, reverse=True)
+                return list(set(sorted(cursor.fetchall() + reverse_lookup)),
+                            reverse=True)
         similar_artists = self.get_similar_artists()
         self._update_similar_artists(artist_id, similar_artists)
-        return sorted(similar_artists + reverse_lookup, reverse=True)
+        return sorted(list(set(similar_artists + reverse_lookup)), reverse=True)
 
     def get_sorted_similar_tracks(self):
         if not self.cache:
-            return sorted(self.get_similar_tracks(),reverse=True)
+            return sorted(list(set(self.get_similar_tracks())),reverse=True)
         artist, title = self.get_artist_and_title(self.get_last_song())
         track = self.get_track(artist, title)
         track_id, updated = track[0], track[3]
@@ -743,10 +744,11 @@ class AutoQueue(EventPlugin):
                     " artists.id = tracks.artist WHERE track_2_track.track1"
                     " = ?",
                     (track_id,))
-                return sorted(cursor.fetchall() + reverse_lookup, reverse=True)
+                return sorted(list(set(cursor.fetchall() + reverse_lookup)),
+                              reverse=True)
         similar_tracks = self.get_similar_tracks()
         self._update_similar_tracks(track_id, similar_tracks)
-        return sorted(similar_tracks + reverse_lookup, reverse=True)
+        return sorted(list(set(similar_tracks + reverse_lookup)), reverse=True)
 
     def _get_artist_match(self, a1, a2):
         cursor = self.connection.cursor()
