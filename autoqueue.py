@@ -1,4 +1,4 @@
-""" AutoQueue: an automatic queueing plugin for Quod Libet.
+"""AutoQueue: an automatic queueing plugin for Quod Libet.
 version 0.1
 Copyright 2007 Eric Casteleijn <thisfred@gmail.com>
 
@@ -135,7 +135,7 @@ def construct_artist_search(artist, restrictions):
     search = "&(%s, %s)" % (search, restrictions)
     return search
 
-def construct_restrictions(track_block_time, restrictors, relaxors):
+def construct_restrictions(track_block_time, relaxors, restrictors):
     """contstruct a QL search string to further modify the searches"""
     restrictions = "#(laststarted > %s days)" % track_block_time
     if relaxors:
@@ -143,7 +143,6 @@ def construct_restrictions(track_block_time, restrictors, relaxors):
     if restrictors:
         restrictions = "&(%s, %s)" % (restrictions, restrictors)
     return restrictions
-
 
 class Cache(object):
     """
@@ -455,41 +454,38 @@ class AutoQueue(EventPlugin):
             song = None
             try:
                 song = generator.next()
+                self.log("found song")
             except StopIteration:
                 if self._songs:
                     song = self._songs.popleft()
                     while self.is_blocked(
                         song.comma("artist").lower()) and self._songs:
                         song = self._songs.pop()
-                        if not self.is_blocked(song.comma("artist").lower()):
-                            self._songs.appendleft(song)
                     if self.is_blocked(song.comma("artist").lower()):
                         song = None
+            try:
+                song2 = generator.next()
+            except StopIteration:
+                song2 = None
+            if (song2 and not (song is song2) and not
+                self.is_blocked(song2.comma("artist").lower())
+                and not song2 in self._songs):
+                self._songs = deque([
+                    bsong for bsong in list(self._songs) if not
+                    self.is_blocked(bsong.comma("artist").lower())])
+                self._songs.appendleft(song2)
+                if len(self._songs) > 10:
+                    self._songs.pop()
+                if self._songs:
+                    self.log("%s backup songs: \n%s" % (
+                        len(self._songs),
+                        "\n".join(["%s - %s" % (
+                        song.comma("artist"),
+                        song.comma("title")) for song in list(self._songs)])))
             if song:
                 gtk.gdk.threads_enter()
-                self.log("queuing song")
                 main.playlist.enqueue([song])
                 gtk.gdk.threads_leave()
-            try:
-                song = generator.next()
-            except StopIteration:
-                continue
-            if self.is_blocked(song.comma("artist").lower()):
-                continue
-            if song in self._songs:
-                continue
-            self._songs = deque([
-                bsong for bsong in list(self._songs) if not
-                self.is_blocked(bsong.comma("artist").lower())])
-            self._songs.appendleft(song)
-            if len(self._songs) > 10:
-                self._songs.pop()
-            if self._songs:
-                self.log("%s backup songs: \n%s" % (
-                    len(self._songs),
-                    "\n".join(["%s - %s" % (
-                    song.comma("artist"),
-                    song.comma("title")) for song in list(self._songs)])))
         self.blocked = False
        
     def block_artist(self, artist_name):
