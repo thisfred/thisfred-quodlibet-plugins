@@ -135,6 +135,16 @@ def construct_artist_search(artist, restrictions):
     search = "&(%s, %s)" % (search, restrictions)
     return search
 
+def construct_restrictions(track_block_time, restrictors, relaxors):
+    """contstruct a QL search string to further modify the searches"""
+    restrictions = "#(laststarted > %s days)" % track_block_time
+    if relaxors:
+        restrictions = "|(%s, %s)" % (restrictions, relaxors)
+    if restrictors:
+        restrictions = "&(%s, %s)" % (restrictions, restrictors)
+    return restrictions
+
+
 class Cache(object):
     """
     >>> dec_cache = Cache(10)
@@ -398,14 +408,10 @@ class AutoQueue(EventPlugin):
         time = sum([row.get("~#length", 0) for row in model])
         return time < self.desired_queue_length
 
-      
     def song_generator(self):
         """yield songs that match the last song in the queue"""
-        restrictions = "#(laststarted > %s days)" % self.track_block_time
-        if self.relaxors:
-            restrictions = "|(%s, %s)" % (restrictions, self.relaxors)
-        if self.restrictors:
-            restrictions = "&(%s, %s)" % (restrictions, self.restrictors)
+        restrictions = construct_restrictions(
+            self.track_block_time, self.relaxors, self.restrictors)
         if self.by_tracks:
             for match, artist, title in self.get_sorted_similar_tracks():
                 if self.is_blocked(artist):
@@ -528,15 +534,15 @@ class AutoQueue(EventPlugin):
             song.comma("artist").lower() for song in main.playlist.q.get()]
 
     def get_last_song(self):
+        """return the last song in the queue or the currently playing
+        song"""
         if len(main.playlist.q):
             return main.playlist.q.get()[-1]
         return self.song
 
-    def enqueue(self, song):
-        self._songs.appendleft(song)
-        
     @Cache(2000)
     def search(self, search):
+        """perform a quod libet search"""
         try:
             myfilter = Query(search).search
             songs = filter(myfilter, library.itervalues())
@@ -544,14 +550,14 @@ class AutoQueue(EventPlugin):
             self.log("error in: %s" % search)
             return []
         return songs
-    
+
     def get_artist_and_title(self, song):
         title = song.comma("title").lower()
         if "version" in song:
             title += " (%s)" % song.comma("version").lower()
         artist_name = song.comma("artist").lower()
         return (artist_name, title)
-    
+
     def get_match(self, by_song, song, by="track"):
         artist_name, title = self.get_artist_and_title(song)
         q_artist_name, q_title = self.get_artist_and_title(by_song)
