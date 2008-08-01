@@ -712,7 +712,7 @@ class AutoQueue(EventPlugin):
                     " artists ON artist_2_artist.artist2 = artists.id WHERE"
                     " artist_2_artist.artist1 = ?",
                     (artist_id,))
-                return list(set(sorted(cursor.fetchall() + reverse_lookup)),
+                return sorted(list(set(cursor.fetchall() + reverse_lookup)),
                             reverse=True)
         similar_artists = self.get_similar_artists()
         self._update_similar_artists(artist_id, similar_artists)
