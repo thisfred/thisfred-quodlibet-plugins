@@ -266,7 +266,7 @@ class AutoQueue(EventPlugin):
         self.by_artists = True
         self.by_tags = True
         self.pick = "best"
-        self.blocked = False
+        self.running = False
         self.verbose = False
         self.now = datetime.now()
         self.connection = None
@@ -394,7 +394,7 @@ class AutoQueue(EventPlugin):
         # add the artist to the blocked list, so their songs won't be
         # played for a determined number of days
         self.block_artist(artist_name)
-        if self.blocked:
+        if self.running:
             return
         if self.queue_needs_songs():
             background = threading.Thread(None, self.add_to_queue) 
@@ -444,7 +444,7 @@ class AutoQueue(EventPlugin):
         
     def add_to_queue(self):
         """search for appropriate songs and put them in the queue"""
-        self.blocked = True
+        self.running = True
         self.connection = sqlite3.connect(self.DB)
         if len(self._songs) >= 10:
             self._songs.pop()
@@ -486,7 +486,7 @@ class AutoQueue(EventPlugin):
                 gtk.gdk.threads_enter()
                 main.playlist.enqueue([song])
                 gtk.gdk.threads_leave()
-        self.blocked = False
+        self.running = False
        
     def block_artist(self, artist_name):
         """store artist name and current daytime so songs by that
