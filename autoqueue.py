@@ -281,6 +281,8 @@ class AutoQueue(EventPlugin):
         self.relaxors = ''
         self.restrictors = ''
         self.read_config()
+        self._artists_to_update = {}
+        self._tracks_to_update = {}
         try:
             pickle = open(self.DUMP, 'r')
             try:
@@ -488,6 +490,12 @@ class AutoQueue(EventPlugin):
                 gtk.gdk.threads_enter()
                 main.playlist.enqueue([song])
                 gtk.gdk.threads_leave()
+        for artist_id in self._artists_to_update:
+            self._update_similar_artists(artist_id, self._artists_to_update[artist_id])
+        self._artists_to_update = {}
+        for track_id in self._tracks_to_update:
+            self._update_similar_tracks(track_id, self._tracks_to_update[track_id])
+        self._tracks_to_update = {}
         self.running = False
        
     def block_artist(self, artist_name):
@@ -717,7 +725,8 @@ class AutoQueue(EventPlugin):
                 return sorted(list(set(cursor.fetchall() + reverse_lookup)),
                             reverse=True)
         similar_artists = self.get_similar_artists()
-        self._update_similar_artists(artist_id, similar_artists)
+        #self._update_similar_artists(artist_id, similar_artists)
+        self._artists_to_update[artist_id] = similar_artists
         return sorted(list(set(similar_artists + reverse_lookup)), reverse=True)
 
     def get_sorted_similar_tracks(self):
@@ -749,7 +758,8 @@ class AutoQueue(EventPlugin):
                 return sorted(list(set(cursor.fetchall() + reverse_lookup)),
                               reverse=True)
         similar_tracks = self.get_similar_tracks()
-        self._update_similar_tracks(track_id, similar_tracks)
+        #self._update_similar_tracks(track_id, similar_tracks)
+        self._tracks_to_update[track_id] = similar_tracks
         return sorted(list(set(similar_tracks + reverse_lookup)), reverse=True)
 
     def _get_artist_match(self, a1, a2):
