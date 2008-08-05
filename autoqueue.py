@@ -29,10 +29,12 @@ from library import library
 import config
 
 # If you change a single character of code, I would ask that you get
-# your own (free) api key from last.fm.
+# your own (free) api key from last.fm here:
+# http://www.last.fm/api/account
 API_KEY = "09d0975a99a4cab235b731d31abf0057"
 
-TRACK_URL = "http://ws.audioscrobbler.com/1.0/track/%s/%s/similar.xml"
+TRACK_URL = "http://ws.audioscrobbler.com/2.0/?method=track.getsimilar" \
+            "&artist=%s&track=%s&api_key=" + API_KEY
 ARTIST_URL = "http://ws.audioscrobbler.com/2.0/?method=artist.getsimilar" \
              "&artist=%s&api_key=" + API_KEY
 INT_SETTINGS = {
