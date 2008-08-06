@@ -1,6 +1,6 @@
 """AutoQueue: an automatic queueing plugin for Quod Libet.
-version 0.1
-Copyright 2007 Eric Casteleijn <thisfred@gmail.com>
+version 0.3
+Copyright 2007-2008 Eric Casteleijn <thisfred@gmail.com>
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License version 2 as
@@ -28,8 +28,8 @@ from qltk import Frame
 from library import library
 import config
 
-# If you change a single character of code, I would ask that you get
-# your own (free) api key from last.fm here:
+# If you change even a single character of code, I would ask that you
+# get and use your own (free) api key from last.fm here:
 # http://www.last.fm/api/account
 API_KEY = "09d0975a99a4cab235b731d31abf0057"
 
@@ -55,9 +55,6 @@ BOOL_SETTINGS = {
     'cache': {
         'value': SQL and True,
         'label': 'caching'},
-    'include_rating': {
-        'value': True,
-        'label': 'include rating'},
     'by_tracks': {
         'value': True,
         'label': 'by track'},
@@ -266,7 +263,6 @@ class AutoQueue(EventPlugin):
         self.desired_queue_length = 4440
         self.cache_time = 90
         self.cache = SQL and True
-        self.include_rating = True
         self.by_tracks = True
         self.by_artists = True
         self.by_tags = True
