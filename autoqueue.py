@@ -273,8 +273,6 @@ class AutoQueue(EventPlugin):
         self.connection = None
         self.song = None
         self._songs = deque([])
-        self.similar_artists = {}
-        self.similar_tracks = {}
         self._blocked_artists = deque([])
         self._blocked_artists_times = deque([])
         self.relaxors = ''
@@ -587,22 +585,6 @@ class AutoQueue(EventPlugin):
             title += " (%s)" % song.comma("version").lower()
         artist_name = song.comma("artist").lower()
         return (artist_name, title)
-
-    def get_match(self, by_song, song, by="track"):
-        artist_name, title = self.get_artist_and_title(song)
-        q_artist_name, q_title = self.get_artist_and_title(by_song)
-        if by == "track":
-            match = self.similar_tracks.get((artist_name, title), 0)
-            if match:
-                return match
-            return self.get_track_match(
-                artist_name, title, q_artist_name, q_title)
-        if by == "tag":
-            return self.get_tag_match(song.list("tag"), by_song.list("tag"))
-        match = self.similar_artists.get((artist_name,), 0)
-        if match:
-            return match
-        return self.get_artist_match(artist_name, q_artist_name)
 
     @Cache(1000)
     def get_track_match(self, a1, t1, a2, t2):
