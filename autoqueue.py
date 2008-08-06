@@ -8,7 +8,7 @@ published by the Free Software Foundation"""
 
 from collections import deque
 from datetime import datetime, timedelta
-from time import strptime
+from time import strptime, sleep
 import urllib, threading
 import random, os
 from xml.dom import minidom
@@ -79,6 +79,9 @@ STR_SETTINGS = {
         'value': '',
         'label': 'relax',},
     }
+
+# be nice to last.fm
+WAIT_BETWEEN_REQUESTS = timedelta(0, 0, 0, 5) 
 
 def dictify(tups):
     """turn a list of n-tuples into a dict with a n-1-tuple as a key
@@ -283,6 +286,7 @@ class AutoQueue(EventPlugin):
         self.read_config()
         self._artists_to_update = {}
         self._tracks_to_update = {}
+        self._last_call = datetime.now()
         try:
             pickle = open(self.DUMP, 'r')
             try:
@@ -355,6 +359,28 @@ class AutoQueue(EventPlugin):
         cursor.execute(
             'CREATE TABLE track_2_track (track1 INTEGER, track2 INTEGER,'
             ' match INTEGER)')
+        connection.commit()
+
+    def prune_db(self):
+        connection = sqlite3.connect(self.DB)
+        cursor = connection.cursor()
+        cursor.execute(
+            'DELETE FROM tracks WHERE updated IS NULL AND tracks.id NOT IN'
+            ' (SELECT track1 FROM track_2_track);')
+        connection.commit()
+        cursor.execute(
+            'DELETE FROM track_2_track WHERE track2 NOT IN (SELECT '
+            'id FROM tracks);')
+        connection.commit()
+        cursor.execute(
+            'DELETE FROM artists WHERE updated IS NULL AND artists.id NOT '
+            'IN (SELECT tracks.artist FROM tracks) AND artists.id NOT IN '
+            '(SELECT artist1 FROM artist_2_artist);'
+            )
+        cursor.execute(
+            'DELETE FROM artist_2_artist WHERE artist2 NOT IN (SELECT '
+            'id FROM artists);'
+            )
         connection.commit()
         
     def dump_stuff(self):
@@ -495,6 +521,7 @@ class AutoQueue(EventPlugin):
         self._artists_to_update = {}
         for track_id in self._tracks_to_update:
             self._update_similar_tracks(track_id, self._tracks_to_update[track_id])
+        self.connection.commit()
         self._tracks_to_update = {}
         self.running = False
        
@@ -616,8 +643,11 @@ class AutoQueue(EventPlugin):
             urllib.quote(enc_artist_name),
             urllib.quote(enc_title))
         try:
+            while self._last_call + WAIT_BETWEEN_REQUESTS > datetime.now():
+                sleep(5)
             stream = urllib.urlopen(url)
             xmldoc = minidom.parse(stream).documentElement
+            self._last_call = datetime.now()
         except:
             return []
         tracks = []
@@ -648,8 +678,11 @@ class AutoQueue(EventPlugin):
         url = ARTIST_URL % (
             urllib.quote(artist_name.encode("utf-8")))
         try:
+            while self._last_call + WAIT_BETWEEN_REQUESTS > datetime.now():
+                sleep(5)
             stream = urllib.urlopen(url)
             xmldoc = minidom.parse(stream).documentElement
+            self._last_call = datetime.now()
         except:
             return []
         artists = []
@@ -666,6 +699,7 @@ class AutoQueue(EventPlugin):
 
     @Cache(1000)
     def get_artist(self, artist_name):
+        self.connection.commit()
         cursor = self.connection.cursor()
         artist_name = artist_name.encode("UTF-8")
         cursor.execute("SELECT * FROM artists WHERE name = ?", (artist_name,))
@@ -679,6 +713,7 @@ class AutoQueue(EventPlugin):
 
     @Cache(2000)
     def get_track(self, artist_name, title):
+        self.connection.commit()
         cursor = self.connection.cursor()
         title = title.encode("UTF-8")
         artist_id = self.get_artist(artist_name)[0]
@@ -762,7 +797,9 @@ class AutoQueue(EventPlugin):
         self._tracks_to_update[track_id] = similar_tracks
         return sorted(list(set(similar_tracks + reverse_lookup)), reverse=True)
 
+    @Cache(1000)
     def _get_artist_match(self, a1, a2):
+        self.connection.commit()
         cursor = self.connection.cursor()
         cursor.execute(
             "SELECT match FROM artist_2_artist WHERE artist1 = ?"
@@ -772,7 +809,9 @@ class AutoQueue(EventPlugin):
         if not row: return 0
         return row[0]
 
+    @Cache(1000)
     def _get_track_match(self, t1, t2):
+        self.connection.commit()
         cursor = self.connection.cursor()
         cursor.execute(
             "SELECT match FROM track_2_track WHERE track1 = ? AND track2 = ?",
@@ -787,7 +826,6 @@ class AutoQueue(EventPlugin):
             "UPDATE artist_2_artist SET match = ? WHERE artist1 = ? AND"
             " artist2 = ?",
             (match, a1, a2))
-        self.connection.commit()
 
     def _update_track_match(self, t1, t2, match):
         cursor = self.connection.cursor()
@@ -795,7 +833,6 @@ class AutoQueue(EventPlugin):
             "UPDATE track_2_track SET match = ? WHERE track1 = ? AND"
             " track2 = ?",
             (match, t1, t2))
-        self.connection.commit()
 
     def _insert_artist_match(self, a1, a2, match):
         cursor = self.connection.cursor()
@@ -803,7 +840,6 @@ class AutoQueue(EventPlugin):
             "INSERT INTO artist_2_artist (artist1, artist2, match) VALUES"
             " (?, ?, ?)",
             (a1, a2, match))
-        self.connection.commit()
 
     def _insert_track_match(self, t1, t2, match):
         cursor = self.connection.cursor()
@@ -811,21 +847,18 @@ class AutoQueue(EventPlugin):
             "INSERT INTO track_2_track (track1, track2, match) VALUES"
             " (?, ?, ?)",
             (t1, t2, match))
-        self.connection.commit()
 
     def _update_artist(self, artist_id):
         cursor = self.connection.cursor()
         cursor.execute(
             "UPDATE artists SET updated = DATETIME('now') WHERE id = ?",
             (artist_id,))
-        self.connection.commit()
 
     def _update_track(self, track_id):
         cursor = self.connection.cursor()
         cursor.execute(
             "UPDATE tracks SET updated = DATETIME('now') WHERE id = ?",
             (track_id,))
-        self.connection.commit()
         
     def _update_similar_artists(self, artist_id, similar_artists):
         for match, artist_name in similar_artists:
