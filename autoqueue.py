@@ -305,6 +305,7 @@ class AutoQueue(EventPlugin):
         if self.cache:
             try:
                 os.stat(self.DB)
+                self.prune_db()
             except OSError:
                 self.create_db()
         # Set up exit hook to dump cache
