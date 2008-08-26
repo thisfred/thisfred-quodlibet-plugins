@@ -300,12 +300,12 @@ class LastFMTagger(EventPlugin):
         can't actually remove tags. Yet.
         """
         log("syncing tags")
-        title = urllib.quote(song.comma("title").encode("utf-8"))
+        title = urllib.quote_plus(song.comma("title").encode("utf-8"))
         if "version" in song:
-            title += urllib.quote(
+            title += urllib.quote_plus(
                 " (%s)" % song.comma("version").encode("utf-8"))
-        artist = urllib.quote(song.comma("artist").encode("utf-8"))
-        album =  urllib.quote(song.comma("album").encode("utf-8"))
+        artist = urllib.quote_plus(song.comma("artist").encode("utf-8"))
+        album =  urllib.quote_plus(song.comma("album").encode("utf-8"))
         ql_tags = set()
         ql_tag_comma = song.comma(self.tag)
         log("local tags: %s" % ql_tag_comma)
