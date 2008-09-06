@@ -248,7 +248,6 @@ class LastFMTagger(EventPlugin):
         gtk.gdk.threads_enter()
         try:
             song[self.tag] = '\n'.join(tags)
-            del song["tag"]
             log("saved tags")
         finally:
             gtk.gdk.threads_leave()
@@ -303,20 +302,16 @@ class LastFMTagger(EventPlugin):
         artist = urllib.quote_plus(song.comma("artist").encode("utf-8"))
         album =  urllib.quote_plus(song.comma("album").encode("utf-8"))
         ql_tags = set()
-        ql_tags_old = set()
         ql_tag_comma = song.comma(self.tag)
-        ql_tag_old = song.comma("tag")
 
         log("local tags: %s" % ql_tag_comma)
         if ql_tag_comma:
             ql_tags = set(ql_tag_comma.split(", "))
-        if ql_tag_old:
-            ql_tags_old = set(ql_tag_old.split(", "))
         lastfm_tags = self.get_lastfm_tags(title, artist, album)
         if direction == 'down':
-            all_tags = ql_tags | lastfm_tags | ql_tags_old
+            all_tags = ql_tags | lastfm_tags
         else:
-            all_tags = ql_tags | ql_tags_old
+            all_tags = ql_tags
         if direction == 'up':
             if all_tags != lastfm_tags:
                 self.submit_tags(
