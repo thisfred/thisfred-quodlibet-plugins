@@ -26,12 +26,12 @@ class AutoSearch(EventPlugin):
             main.browser.set_text(title)
         else:
             if (main.browser.status ==
-                "|(grouping=favorites, !tag='', &(#(skipcount < 1), #(playcount < 1)), "
+                "|(grouping=favorites, &(#(skipcount < 1), #(playcount < 1)), "
                 "#(added < 90 days))"):
                 print "[autosearch:] *new* already set"
                 return
             main.browser.set_text(
-                "|(grouping=favorites, tag!='', &(#(skipcount < 1), #(playcount < 1)), "
+                "|(grouping=favorites, &(#(skipcount < 1), #(playcount < 1)), "
                 "#(added < 90 days))")
         main.browser.activate()
         
