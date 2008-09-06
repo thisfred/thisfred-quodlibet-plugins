@@ -52,7 +52,7 @@ class LastFMTagger(EventPlugin):
     password = ""
     session = ""
 
-    tag = '~tag'
+    tag = 'grouping'
     
     # state management
     need_config = True
@@ -103,11 +103,6 @@ class LastFMTagger(EventPlugin):
         hasher = md5.new()
         hasher.update(password)
         self.password = hasher.hexdigest()
-        try:
-            self.tag = config.get(
-                "plugins", "lastfmtagger_files") == "true" and "tag" or "~tag"
-        except:
-            pass
         self.need_config = False
 
     def __destroy_cb(self, dialog, response_id):
@@ -253,6 +248,7 @@ class LastFMTagger(EventPlugin):
         gtk.gdk.threads_enter()
         try:
             song[self.tag] = '\n'.join(tags)
+            del song["tag"]
             log("saved tags")
         finally:
             gtk.gdk.threads_leave()
@@ -307,15 +303,20 @@ class LastFMTagger(EventPlugin):
         artist = urllib.quote_plus(song.comma("artist").encode("utf-8"))
         album =  urllib.quote_plus(song.comma("album").encode("utf-8"))
         ql_tags = set()
+        ql_tags_old = set()
         ql_tag_comma = song.comma(self.tag)
+        ql_tag_old = song.comma("tag")
+
         log("local tags: %s" % ql_tag_comma)
         if ql_tag_comma:
             ql_tags = set(ql_tag_comma.split(", "))
+        if ql_tag_old:
+            ql_tags_old = set(ql_tag_old.split(", "))
         lastfm_tags = self.get_lastfm_tags(title, artist, album)
         if direction == 'down':
-            all_tags = ql_tags | lastfm_tags
+            all_tags = ql_tags | lastfm_tags | ql_tags_old
         else:
-            all_tags = ql_tags
+            all_tags = ql_tags | ql_tags_old
         if direction == 'up':
             if all_tags != lastfm_tags:
                 self.submit_tags(
