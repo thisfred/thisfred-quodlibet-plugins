@@ -292,8 +292,7 @@ class LastFMTagger(EventPlugin):
         there are differences, they are processed as followed: tags
         that are on last.fm but not on the file are saved to the file,
         and tags that are on the file but but not on last.fm are
-        submitted. This is non-destructive which means the system
-        can't actually remove tags. Yet.
+        submitted.
         """
         log("syncing tags")
         title = urllib.quote_plus(song.comma("title").encode("utf-8"))
