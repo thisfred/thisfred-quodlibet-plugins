@@ -64,7 +64,6 @@ class LastFMTagger(EventPlugin):
         # Read configuration
         self.read_config()
 
-    
     def plugin_on_song_started(self, song):
         """Triggered when song starts"""
         if song is None:
@@ -157,14 +156,15 @@ class LastFMTagger(EventPlugin):
         tagnodes = xmldoc.getElementsByTagName("tag")
         for tagnode in tagnodes:
             if prefix is not None:
-                tags.add("%s:%s" % (
+                tag = "%s:%s" % (
                     prefix, 
                     tagnode.getElementsByTagName(
-                    "name")[0].firstChild.nodeValue))
-            else:
-                tags.add(
-                    tagnode.getElementsByTagName(
                     "name")[0].firstChild.nodeValue)
+                tags.add(tag.lower())
+            else:
+                tag = tagnode.getElementsByTagName(
+                    "name")[0].firstChild.nodeValue
+                tags.add(tag.lower())
         self.lastfm_cache[url] = tags
         return tags
         
@@ -196,8 +196,9 @@ class LastFMTagger(EventPlugin):
 
     def get_tags_for(self, tags, for_=""):
         if for_:
-            return set(tag for tag in tags if tag.startswith('%s:' % for_))
-        return set(tag for tag in tags if not (
+            return set(tag.lower() for tag in tags
+                       if tag.startswith('%s:' % for_))
+        return set(tag.lower() for tag in tags if not (
             tag.startswith('album:') or tag.startswith('artist:')))
         
     def submit_artist_tags(self, song, tags):
@@ -326,14 +327,6 @@ class LastFMTagger(EventPlugin):
         
     def PluginPreferences(self, parent):
 
-        def toggled(widget):
-            if widget.get_active():
-                config.set("plugins", "lastfmtagger_files", "true")
-                self.tag = "tag"
-            else:
-                config.set("plugins", "lastfmtagger_files", "false")
-                self.tag = "~tag"
-                
         def changed(entry, key):
             # having a function for each entry is unnecessary..
             config.set("plugins", "lastfmtagger_" + key, entry.get_text())
@@ -359,10 +352,6 @@ class LastFMTagger(EventPlugin):
         lu = gtk.Label(_("Username:"))
         lp = gtk.Label(_("Password:"))
         ls = gtk.Label(_("Session:"))
-
-        files = gtk.CheckButton(
-            _("Write tags to files. (When disabled the\ntags are written to"
-              " the database only.)"))
 
         for l in [lt, lu, lp, ls]:
             l.set_line_wrap(True)
@@ -392,19 +381,12 @@ class LastFMTagger(EventPlugin):
         except:
             pass
         
-        try:
-            if config.get("plugins", "lastfmtagger_files") == "true":
-                files.set_active(True)
-        except:
-            pass
         table.attach(userent, 1, 2, 1, 2, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(pwent, 1, 2, 2, 3, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(session, 1, 2, 3, 4, xoptions=gtk.FILL | gtk.SHRINK)
-        table.attach(files, 0, 2, 5, 7, xoptions=gtk.FILL | gtk.SHRINK)
         pwent.connect('changed', changed, 'password')
         userent.connect('changed', changed, 'username')
         session.connect('changed', changed, 'session')
 
         table.connect('destroy', destroyed)
-        files.connect('toggled', toggled)
         return table
