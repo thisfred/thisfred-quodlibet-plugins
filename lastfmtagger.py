@@ -317,7 +317,7 @@ class LastFMTagger(EventPlugin):
                 self.submit_tags(
                     song, artist, album, title, all_tags, lastfm_tags)
         if direction == 'down':
-            if all_tags > ql_tags:
+            if all_tags:
                 self.save_tags(song, all_tags)
         
     def get_timestamp(self):
