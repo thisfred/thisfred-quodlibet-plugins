@@ -306,7 +306,7 @@ class LastFMTagger(EventPlugin):
 
         log("local tags: %s" % ql_tag_comma)
         if ql_tag_comma:
-            ql_tags = set(ql_tag_comma.split(", "))
+            ql_tags = set([tag.lower() for tag in ql_tag_comma.split(", ")])
         lastfm_tags = self.get_lastfm_tags(title, artist, album)
         if direction == 'down':
             all_tags = ql_tags | lastfm_tags
