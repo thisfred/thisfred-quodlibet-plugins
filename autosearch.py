@@ -23,8 +23,8 @@ class AutoSearch(EventPlugin):
         if song is not None and (
             self.ignore_empty_queue or len(main.playlist.q) > 0):
             search = "|(artist=%s,title=%s)" % (
-                song.comma("artist").lower().replace("#", ""),
-                song.comma("title").lower().replace("#", ""))
+                song.comma("artist").lower(),
+                song.comma("title").lower()).replace("#", "").replace("/", " ")
             main.browser.set_text(search)
         else:
             if (main.browser.status ==
