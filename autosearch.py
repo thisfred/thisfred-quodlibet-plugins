@@ -28,7 +28,7 @@ class AutoSearch(EventPlugin):
                 artist,
                 title,
                 title)
-            for bad_char in "#/!":
+            for bad_char in "#/!)":
                 search = search.replace(bad_char, "")
             main.browser.set_text(search)
         else:
