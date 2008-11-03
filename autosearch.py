@@ -24,7 +24,7 @@ class AutoSearch(EventPlugin):
             self.ignore_empty_queue or len(main.playlist.q) > 0):
             artist = song.comma("artist").lower().replace("'", "")
             title = song.comma("title").lower().replace("'", "")
-            for bad_char in "'\")!=\\":
+            for bad_char in ",'\")!=\\":
                 artist = artist.replace(bad_char, "#")                
                 title = title.replace(bad_char, "#")
             artists = artist.split('#')
