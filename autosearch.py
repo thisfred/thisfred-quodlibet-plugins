@@ -22,13 +22,13 @@ class AutoSearch(EventPlugin):
     def plugin_on_song_started(self, song):
         if song is not None and (
             self.ignore_empty_queue or len(main.playlist.q) > 0):
-            artist = song.comma("artist").lower().replace(")", "")
-            title = song.comma("title").lower().replace(")", "")
-            search = "|(artist=%s,title=%s,~filename=%s)" % (
+            artist = song.comma("artist").lower().replace("'", "")
+            title = song.comma("title").lower().replace("'", "")
+            search = "|(artist='%s',title='%s',~filename='%s')" % (
                 artist,
                 title,
                 title)
-            for bad_char in "#/!":
+            for bad_char in "#":
                 search = search.replace(bad_char, "")
             main.browser.set_text(search)
         else:
