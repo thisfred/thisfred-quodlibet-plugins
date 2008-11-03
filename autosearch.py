@@ -24,12 +24,18 @@ class AutoSearch(EventPlugin):
             self.ignore_empty_queue or len(main.playlist.q) > 0):
             artist = song.comma("artist").lower().replace("'", "")
             title = song.comma("title").lower().replace("'", "")
-            search = "|(artist='%s',title='%s',~filename='%s')" % (
-                artist,
-                title,
-                title)
-            for bad_char in "#":
-                search = search.replace(bad_char, "")
+            for bad_char in "'\")!=\\":
+                artist = artist.replace(bad_char, "#")                
+                title = title.replace(bad_char, "#")
+            artists = artist.split('#')
+            titles = title.split('#')
+            artist_search = "&(%s)" % (','.join(['artist=%s' % a for a in artists]))
+            title_search = "&(%s)" % (','.join(['title=%s' % t for t in titles]))
+            filename_search = "&(%s)" % (','.join(['~filename=%s' % t for t in titles]))
+            search = ("|(%s,%s,%s)" % (
+                artist_search, 
+                title_search, 
+                filename_search))
             main.browser.set_text(search)
         else:
             if (main.browser.status ==
