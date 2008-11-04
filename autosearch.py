@@ -27,14 +27,16 @@ class AutoSearch(EventPlugin):
             for bad_char in "&|,'\")!=\\":
                 artist = artist.replace(bad_char, "#")                
                 title = title.replace(bad_char, "#")
+            filename = title.replace(' ', '#')
             artists = artist.split('#')
             titles = title.split('#')
+            filenames = filename.split('#')
             artist_search = "&(%s)" % (
                 ','.join(['artist=%s' % a for a in artists if a]))
             title_search = "&(%s)" % (
                 ','.join(['title=%s' % t for t in titles if t]))
             filename_search = "&(%s)" % (
-                ','.join(['~filename=%s' % t for t in titles if t]))
+                ','.join(['~filename=%s' % f for f in filenames if f]))
             search = ("|(%s,%s,%s)" % (
                 artist_search, 
                 title_search, 
