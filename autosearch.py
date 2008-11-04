@@ -22,8 +22,8 @@ class AutoSearch(EventPlugin):
     def plugin_on_song_started(self, song):
         if song is not None and (
             self.ignore_empty_queue or len(main.playlist.q) > 0):
-            artist = song.comma("artist").lower().replace("'", "")
-            title = song.comma("title").lower().replace("'", "")
+            artist = song.comma("artist").lower()
+            title = song.comma("title").lower()
             for bad_char in "&|,'\")!=\\":
                 artist = artist.replace(bad_char, "#")                
                 title = title.replace(bad_char, "#")
