@@ -102,6 +102,7 @@ class LastFMTagger(EventPlugin):
         hasher = md5.new()
         hasher.update(password)
         self.password = hasher.hexdigest()
+        self.tag = 'grouping'
         self.need_config = False
 
     def __destroy_cb(self, dialog, response_id):

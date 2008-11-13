@@ -24,6 +24,7 @@ class AutoSearch(EventPlugin):
             self.ignore_empty_queue or len(main.playlist.q) > 0):
             artist = song.comma("artist").lower()
             title = song.comma("title").lower()
+            album = song.comma("album").lower()
             for bad_char in "/&|,'\"()!=\\":
                 artist = artist.replace(bad_char, "#")                
                 title = title.replace(bad_char, "#")
@@ -40,7 +41,11 @@ class AutoSearch(EventPlugin):
             search = ("|(%s,%s,%s)" % (
                 artist_search, 
                 title_search, 
-                filename_search))
+                filename_search,))
+            if album:
+                album_search = "album=%s" % repr(album.encode('utf-8'))
+                search = ("|(%s,%s,%s,%s)" % (
+                    artist_search, title_search, filename_search, album_search))
             main.browser.set_text(search)
         else:
             if (main.browser.status ==
