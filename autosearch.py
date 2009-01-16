@@ -34,11 +34,12 @@ class AutoSearch(EventPlugin):
             titles = title.split('#')
             filenames = filename.split('#')
             artist_search = "&(%s)" % (
-                ','.join(['artist=%s' % a for a in artists if a]))
+                ','.join(['|(artist=%s,performer=%s)' % (a, a) for a in artists
+                          if a.strip()]))
             title_search = "&(%s)" % (
-                ','.join(['title=%s' % t for t in titles if t]))
+                ','.join(['title=%s' % t for t in titles if t.strip()]))
             filename_search = "&(%s)" % (
-                ','.join(['~filename=%s' % f for f in filenames if f]))
+                ','.join(['~filename=%s' % f for f in filenames if f.strip()]))
             search = ("|(%s,%s,%s)" % (
                 artist_search, 
                 title_search, 
