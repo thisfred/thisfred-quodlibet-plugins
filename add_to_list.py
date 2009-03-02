@@ -19,4 +19,4 @@ class AddToListPlugin(SongsMenuPlugin):
     def plugin_songs(self, songs):
         f = open(os.path.join(self.player_get_userdir(), "list.txt"), 'a')
         for song in songs:
-            f.write(song("~filename") + '\n')
+            f.write('"%s"\n' % song("~filename"))
