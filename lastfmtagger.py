@@ -276,12 +276,12 @@ class LastFMTagger(EventPlugin):
             self.ALBUM_TAG_URL % (self.username, artist, album)] = album_tags
 
     def sync_up(self, song):
+        yield
         self.sync_tags(song, 'up')
-        yield True
         
     def sync_down(self, song):
+        yield
         self.sync_tags(song, 'down')
-        yield True
         
     def sync_tags(self, song, direction):
         """
