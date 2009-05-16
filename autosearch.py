@@ -25,14 +25,16 @@ class AutoSearch(EventPlugin):
             self.ignore_empty_queue or len(main.playlist.q) > 0):
             artist = song.comma("artist").lower()
             title = song.comma("title").lower()
-            #album = song.comma("album").lower()
+            album = song.comma("album").lower()
             for bad_char in "/&|,'\"()!=\\":
-                artist = artist.replace(bad_char, "#")                
+                artist = artist.replace(bad_char, "#")
                 title = title.replace(bad_char, "#")
+                album = album.replace(bad_char, "#")
             filename = title.replace(' ', '#')
             artists = artist.split('#')
             titles = title.split('#')
             filenames = filename.split('#')
+            albums = filename.split("#")
             artist_search = "&(%s)" % (
                 ','.join(['|(artist=%s,performer=%s)' % (a, a) for a in artists
                           if a.strip()]))
@@ -40,14 +42,10 @@ class AutoSearch(EventPlugin):
                 ','.join(['title=%s' % t for t in titles if t.strip()]))
             filename_search = "&(%s)" % (
                 ','.join(['~filename=%s' % f for f in filenames if f.strip()]))
+            album_search = "&(%s)" % (
+                ','.join(["album=%s" % a for a in albums if a.strip()]))
             search = ("|(%s,%s,%s)" % (
-                artist_search, 
-                title_search, 
-                filename_search,))
-            ## if album:
-            ##     album_search = "album=%s" % repr(album.encode('utf-8'))
-            ##     search = ("|(%s,%s,%s,%s)" % (
-            ##         artist_search, title_search, filename_search, album_search))
+                artist_search, title_search, filename_search, album_search))
             main.browser.set_text(search)
         else:
             if (main.browser.status ==
@@ -59,4 +57,4 @@ class AutoSearch(EventPlugin):
                 "|(grouping=favorites, &(#(skipcount < 1), #(playcount < 1)), "
                 "#(added < 90 days))")
         main.browser.activate()
-        
+
