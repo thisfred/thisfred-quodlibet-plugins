@@ -34,7 +34,7 @@ class AutoSearch(EventPlugin):
             artists = artist.split('#')
             titles = title.split('#')
             filenames = filename.split('#')
-            albums = filename.split("#")
+            albums = album.split("#")
             artist_search = "&(%s)" % (
                 ','.join(['|(artist=%s,performer=%s)' % (a, a) for a in artists
                           if a.strip()]))
@@ -44,7 +44,7 @@ class AutoSearch(EventPlugin):
                 ','.join(['~filename=%s' % f for f in filenames if f.strip()]))
             album_search = "&(%s)" % (
                 ','.join(["album=%s" % a for a in albums if a.strip()]))
-            search = ("|(%s,%s,%s)" % (
+            search = ("|(%s,%s,%s, %s)" % (
                 artist_search, title_search, filename_search, album_search))
             main.browser.set_text(search)
         else:
