@@ -31,21 +31,30 @@ class AutoSearch(EventPlugin):
                 title = title.replace(bad_char, "#")
                 album = album.replace(bad_char, "#")
             filename = title.replace(' ', '#')
-            artists = artist.split('#')
-            titles = title.split('#')
-            filenames = filename.split('#')
-            albums = album.split("#")
-            artist_search = "&(%s)" % (
-                ','.join(['|(artist=%s,performer=%s)' % (a, a) for a in artists
-                          if a.strip()]))
-            title_search = "&(%s)" % (
-                ','.join(['title=%s' % t for t in titles if t.strip()]))
-            filename_search = "&(%s)" % (
-                ','.join(['~filename=%s' % f for f in filenames if f.strip()]))
-            album_search = "&(%s)" % (
-                ','.join(["album=%s" % a for a in albums if a.strip()]))
-            search = ("|(%s,%s,%s, %s)" % (
-                artist_search, title_search, filename_search, album_search))
+            artists = split_filter(artist)
+            titles = split_filter(title)
+            filenames = split_filter(filename)
+            albums = split_filter(album)
+            artist_search = ''
+            title_search = ''
+            filename_search = ''
+            album_search = ''
+            if artist:
+                artist_search = "&(%s)" % (
+                    ','.join(['|(artist=%s,performer=%s)' % (a, a) for a in
+                          artists]))
+            if title:
+                title_search = "&(%s)" % (
+                    ','.join(['title=%s' % t for t in titles]))
+            if filename:
+                filename_search = "&(%s)" % (
+                    ','.join(['~filename=%s' % f for f in filenames]))
+            if album:
+                album_search = "&(%s)" % (
+                    ','.join(["album=%s" % a for a in albums]))
+            search = ("|(%s)" % ','.join([s for s in [
+                artist_search, title_search, filename_search, album_search]
+                                          if s]))
             main.browser.set_text(search)
         else:
             if (main.browser.status ==
@@ -58,3 +67,5 @@ class AutoSearch(EventPlugin):
                 "#(added < 90 days))")
         main.browser.activate()
 
+def split_filter(value):
+    return [v for v in value.split('#') if v.strip()]
