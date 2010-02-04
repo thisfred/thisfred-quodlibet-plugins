@@ -17,21 +17,19 @@ class AutoSearch(EventPlugin):
     PLUGIN_NAME = _("Automatic Searching")
     PLUGIN_VERSION = "0.1"
     PLUGIN_DESC = ("Automatically do a search for the title of the"
-                   "current song. (Helps to indentify covers & doubles.)")
+                   "current song. (Helps to indentify covers & duplicates.)")
 
     ignore_empty_queue = True
     def plugin_on_song_started(self, song):
         if song is not None and (
             self.ignore_empty_queue or len(main.playlist.q) > 0):
-            artist = song.comma("artist").lower()
             title = song.comma("title").lower()
             album = song.comma("album").lower()
-            for bad_char in "/&|,'\"()!=\\":
-                artist = artist.replace(bad_char, "#")
+            for bad_char in "/&|,'\"()!=\\<>":
                 title = title.replace(bad_char, "#")
                 album = album.replace(bad_char, "#")
             filename = title.replace(' ', '#')
-            artists = split_filter(artist)
+            artists = get_artists(song)
             titles = split_filter(title)
             filenames = split_filter(filename)
             albums = split_filter(album)
@@ -39,13 +37,16 @@ class AutoSearch(EventPlugin):
             title_search = ''
             filename_search = ''
             album_search = ''
-            if artist:
-                artist_search = "&(%s)" % (
+            tag_search = ''
+            if artists:
+                artist_search = "|(%s)" % (
                     ','.join(['|(artist=%s,performer=%s)' % (a, a) for a in
                           artists]))
             if title:
                 title_search = "&(%s)" % (
                     ','.join(['title=%s' % t for t in titles]))
+                tag_search ="&(%s)" % (
+                    ','.join(['grouping=%s' % t for t in titles]))
             if filename:
                 filename_search = "&(%s)" % (
                     ','.join(['~filename=%s' % f for f in filenames]))
@@ -53,8 +54,8 @@ class AutoSearch(EventPlugin):
                 album_search = "&(%s)" % (
                     ','.join(["album=%s" % a for a in albums]))
             search = ("|(%s)" % ','.join([s for s in [
-                artist_search, title_search, filename_search, album_search]
-                                          if s]))
+                artist_search, title_search, filename_search, album_search,
+                tag_search] if s]))
             main.browser.set_text(search)
         else:
             if (main.browser.status ==
@@ -65,7 +66,27 @@ class AutoSearch(EventPlugin):
             main.browser.set_text(
                 "|(grouping=favorites, &(#(skipcount < 1), #(playcount < 1)), "
                 "#(added < 90 days))")
+        #main.browser.do_grab_focus()
         main.browser.activate()
+
+def get_artists(song):
+    """return lowercase UNICODE name of artists and performers."""
+    artists = []
+    performers = [remove_role(artist) for artist in song.list("performer")]
+    for tag in song._song:
+        if tag.startswith('performer:'):
+            performers.extend(
+                [artist for artist in song.list(tag)])
+    for artist in song.list("artist") + performers:
+        for bad_char in "/&|,'\"()!=\\<>":
+            artist = artist.replace(bad_char, "#")
+        artists.extend([a.lower() for a in artist.split('#') if a])
+    return set(artists)
 
 def split_filter(value):
     return [v for v in value.split('#') if v.strip()]
+
+def remove_role(artist):
+    if not artist.endswith(')'):
+        return artist
+    return artist.split('(')[0]
