@@ -12,9 +12,7 @@ import config, widgets
 import gobject, gtk, xmlrpclib
 from time import time
 from xml.dom import minidom
-from qltk.msg import Message, WarningMessage
-from qltk.entry import ValidatingEntry
-from library import library
+from qltk.msg import Message
 from quodlibet.util import copool
 from plugins.events import EventPlugin
 
@@ -28,7 +26,7 @@ def log(msg):
 
 def split_tag(tag):
     if tag.startswith('artist:') or tag.startswith('tag:'):
-        return tag.split(':')[1:]
+        return ':'.join(tag.split(':')[1:])
     return tag
 
 class LastFMTagger(EventPlugin):
@@ -234,7 +232,7 @@ class LastFMTagger(EventPlugin):
             md5hash,
             song["artist"],
             song["album"],
-            [':'.join(tag.split(':')[1:]) for tag in tags],
+            split_tag(tags),
             'set')
 
     def _submit_album_tags(self, *args):
