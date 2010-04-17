@@ -26,6 +26,11 @@ def log(msg):
     if VERBOSE:
         print "[lastfmtagger]", msg
 
+def split_tag(tag):
+    if tag.startswith('artist:') or tag.startswith('tag:'):
+        return tag.split(':')[1:]
+    return tag
+
 class LastFMTagger(EventPlugin):
     """Main plugin class"""
     # session invariants
@@ -45,21 +50,21 @@ class LastFMTagger(EventPlugin):
     ALBUM_TAG_URL = \
         "http://ws.audioscrobbler.com/1.0/user/%s/albumtags.xml?" \
         "artist=%s&album=%s"
-    
+
     # things that could change
-    
+
     username = ""
     password = ""
     session = ""
 
     tag = 'grouping'
-    
+
     # state management
     need_config = True
     __enabled = False
 
     lastfm_cache = {}
-    
+
     def __init__(self):
         # Read configuration
         self.read_config()
@@ -77,7 +82,7 @@ class LastFMTagger(EventPlugin):
             return
         log("===> UP")
         copool.add(self.sync_up, song)
-        
+
     def read_config(self):
         """Read the options from the configuration file"""
         username = ""
@@ -107,7 +112,7 @@ class LastFMTagger(EventPlugin):
 
     def __destroy_cb(self, dialog, response_id):
         dialog.destroy()
-    
+
     def quick_dialog_helper(self, dtype, dstr):
         dialog = Message(gtk.MESSAGE_INFO, widgets.main, "LastFMTagger", dstr)
         dialog.connect('response', self.__destroy_cb)
@@ -115,7 +120,7 @@ class LastFMTagger(EventPlugin):
 
     def quick_dialog(self, dstr, dtype):
         gobject.idle_add(self.quick_dialog_helper, dtype, dstr)
-    
+
     def enabled(self):
         self.__enabled = True
 
@@ -158,7 +163,7 @@ class LastFMTagger(EventPlugin):
         for tagnode in tagnodes:
             if prefix is not None:
                 tag = "%s:%s" % (
-                    prefix, 
+                    prefix,
                     tagnode.getElementsByTagName(
                     "name")[0].firstChild.nodeValue)
                 tags.add(tag.lower())
@@ -168,7 +173,7 @@ class LastFMTagger(EventPlugin):
                 tags.add(tag.lower())
         self.lastfm_cache[url] = tags
         return tags
-        
+
     def submit_track_tags(self, song, tags):
         """Submit the tags to last.fm if locally changes are detected.
         """
@@ -201,17 +206,13 @@ class LastFMTagger(EventPlugin):
                        if tag.startswith('%s:' % for_))
         return set(tag.lower() for tag in tags if not (
             tag.startswith('album:') or tag.startswith('artist:')))
-        
+
     def submit_artist_tags(self, song, tags):
         log("submitting artist tags: %s " % ', '.join(tags))
         random_string, md5hash = self.get_timestamp()
+        tags = [split_tag(tag) for tag in tags]
         self._submit_artist_tags(
-            self.username,
-            random_string,
-            md5hash,
-            song["artist"],
-            [':'.join(tag.split(':')[1:]) for tag in tags],
-            'set')
+            self.username, random_string, md5hash, song["artist"], tags, 'set')
 
     def _submit_artist_tags(self, *args):
         log("submitting artist tags: %s " % repr(args))
@@ -235,7 +236,7 @@ class LastFMTagger(EventPlugin):
             song["album"],
             [':'.join(tag.split(':')[1:]) for tag in tags],
             'set')
-    
+
     def _submit_album_tags(self, *args):
         log("submitting album tags: %s " % repr(args))
         try:
@@ -278,11 +279,11 @@ class LastFMTagger(EventPlugin):
     def sync_up(self, song):
         yield
         self.sync_tags(song, 'up')
-        
+
     def sync_down(self, song):
         yield
         self.sync_tags(song, 'down')
-        
+
     def sync_tags(self, song, direction):
         """
         This is the meat of the plugin. What it does is get the user's
@@ -320,11 +321,11 @@ class LastFMTagger(EventPlugin):
         if direction == 'down':
             if all_tags:
                 self.save_tags(song, all_tags)
-        
+
     def get_timestamp(self):
         timestamp = str(int(time()))
         return timestamp, md5.md5(self.password + timestamp).hexdigest()
-        
+
     def PluginPreferences(self, parent):
 
         def changed(entry, key):
@@ -360,13 +361,13 @@ class LastFMTagger(EventPlugin):
         table.attach(lu, 0, 1, 1, 2, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(lp, 0, 1, 2, 3, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(ls, 0, 1, 3, 4, xoptions=gtk.FILL | gtk.SHRINK)
-            
+
         userent = gtk.Entry()
         pwent = gtk.Entry()
         session = gtk.Entry()
         pwent.set_visibility(False)
         pwent.set_invisible_char('*')
-        
+
         table.set_border_width(6)
         try:
             userent.set_text(config.get("plugins", "lastfmtagger_username"))
@@ -380,7 +381,7 @@ class LastFMTagger(EventPlugin):
             session.set_text(config.get("plugins", "lastfmtagger_session"))
         except:
             pass
-        
+
         table.attach(userent, 1, 2, 1, 2, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(pwent, 1, 2, 2, 3, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(session, 1, 2, 3, 4, xoptions=gtk.FILL | gtk.SHRINK)
