@@ -24,10 +24,6 @@ def log(msg):
     if VERBOSE:
         print "[lastfmtagger]", msg
 
-def split_tag(tag):
-    if tag.startswith('artist:') or tag.startswith('tag:'):
-        return ':'.join(tag.split(':')[1:])
-    return tag
 
 class LastFMTagger(EventPlugin):
     """Main plugin class"""
@@ -200,7 +196,7 @@ class LastFMTagger(EventPlugin):
 
     def get_tags_for(self, tags, for_=""):
         if for_:
-            return set(tag.lower() for tag in tags
+            return set(':'.join(tag.lower().split(':')[1:]) for tag in tags
                        if tag.startswith('%s:' % for_))
         return set(tag.lower() for tag in tags if not (
             tag.startswith('album:') or tag.startswith('artist:')))
@@ -208,7 +204,6 @@ class LastFMTagger(EventPlugin):
     def submit_artist_tags(self, song, tags):
         log("submitting artist tags: %s " % ', '.join(tags))
         random_string, md5hash = self.get_timestamp()
-        tags = [split_tag(tag) for tag in tags]
         self._submit_artist_tags(
             self.username, random_string, md5hash, song["artist"], tags, 'set')
 
@@ -227,13 +222,8 @@ class LastFMTagger(EventPlugin):
         if not album_tags: return album_tags
         random_string, md5hash = self.get_timestamp()
         self._submit_album_tags(
-            self.username,
-            random_string,
-            md5hash,
-            song["artist"],
-            song["album"],
-            split_tag(tags),
-            'set')
+            self.username, random_string, md5hash, song["artist"],
+            song["album"], tags, 'set')
 
     def _submit_album_tags(self, *args):
         log("submitting album tags: %s " % repr(args))
