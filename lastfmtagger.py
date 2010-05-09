@@ -205,7 +205,8 @@ class LastFMTagger(EventPlugin):
         log("submitting artist tags: %s " % ', '.join(tags))
         random_string, md5hash = self.get_timestamp()
         self._submit_artist_tags(
-            self.username, random_string, md5hash, song["artist"], tags, 'set')
+            self.username, random_string, md5hash, song["artist"], list(tags),
+            'set')
 
     def _submit_artist_tags(self, *args):
         log("submitting artist tags: %s " % repr(args))
@@ -218,12 +219,10 @@ class LastFMTagger(EventPlugin):
 
     def submit_album_tags(self, song, tags):
         log("submitting album tags: %s " % ', '.join(tags))
-        album_tags = set(tag for tag in tags if tag.startswith('album:'))
-        if not album_tags: return album_tags
         random_string, md5hash = self.get_timestamp()
         self._submit_album_tags(
             self.username, random_string, md5hash, song["artist"],
-            song["album"], tags, 'set')
+            song["album"], list(tags), 'set')
 
     def _submit_album_tags(self, *args):
         log("submitting album tags: %s " % repr(args))
@@ -296,7 +295,8 @@ class LastFMTagger(EventPlugin):
 
         log("local tags: %s" % ql_tag_comma)
         if ql_tag_comma:
-            ql_tags = set([tag.lower() for tag in ql_tag_comma.split(", ")])
+            ql_tags = set([
+                tag.lower().strip() for tag in ql_tag_comma.split(",")])
         lastfm_tags = self.get_lastfm_tags(title, artist, album)
         if direction == 'down':
             all_tags = ql_tags | lastfm_tags
