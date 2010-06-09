@@ -255,15 +255,15 @@ class LastFMTagger(EventPlugin):
         if artist_tags != lastfm_artist_tags:
             self.submit_artist_tags(song, artist_tags)
         self.lastfm_cache[
-            self.ARTIST_TAG_URL % (self.username, artist)] = [
-            'artist:%s' % tag for tag in artist_tags]
+            self.ARTIST_TAG_URL % (self.username, artist)] = set([
+            'artist:%s' % tag for tag in artist_tags])
         album_tags = self.get_tags_for(all_tags, for_="album")
         lastfm_album_tags = self.get_tags_for(lastfm_tags, for_="album")
         if album_tags != lastfm_album_tags:
             self.submit_album_tags(song, album_tags)
         self.lastfm_cache[
-            self.ALBUM_TAG_URL % (self.username, artist, album)] = [
-            'album:%s' % tag for tag in album_tags]
+            self.ALBUM_TAG_URL % (self.username, artist, album)] = set([
+            'album:%s' % tag for tag in album_tags])
 
     def sync_up(self, song):
         yield
