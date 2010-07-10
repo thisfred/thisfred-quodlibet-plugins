@@ -38,21 +38,26 @@ class AutoSearch(EventPlugin):
             album_search = ''
             tag_search = ''
             if artists:
-                artist_search = "|(%s)" % (
-                    ','.join(['|(artist=%s,performer=%s)' % (a, a) for a in
-                          artists]))
+                aa = ','.join(
+                    ["|(artist=%s,performer=%s)" % (a, a) for a in artists])
+                if aa:
+                    artist_search = "|(%s)" % aa
             if title:
-                title_search = "&(%s)" % (
-                    ','.join(['title=%s' % t for t in titles if len(t) > 1]))
-                tag_search ="&(%s)" % (
-                    ','.join(['grouping=%s' % t for t in titles if len(t) > 2]))
+                tt = ','.join(['title=%s' % t for t in titles if len(t) > 1])
+                if tt:
+                    title_search = "&(%s)" % tt
+                tt = ','.join(['grouping=%s' % t for t in titles if len(t) > 2])
+                if tt:
+                    tag_search ="&(%s)" % tt
             if filename:
-                filename_search = "&(%s)" % (
-                    ','.join([
-                        '~filename=%s' % f for f in filenames if len(f) > 3]))
+                ff = ','.join(
+                    ['~filename=%s' % f for f in filenames if len(f) > 3])
+                if ff:
+                    filename_search = "&(%s)" % ff
             if album:
-                album_search = "&(%s)" % (
-                    ','.join(["album=%s" % a for a in albums if len(a) > 2]))
+                aa = ','.join(["album=%s" % a for a in albums if len(a) > 2])
+                if aa:
+                    album_search = "&(%s)" % aa
             search = ("|(%s)" % ','.join([s for s in [
                 artist_search, title_search, filename_search, album_search,
                 tag_search] if s]))
