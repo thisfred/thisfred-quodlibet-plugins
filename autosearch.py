@@ -7,7 +7,6 @@
 #
 # $Id: autorating.py 3819 2006-09-04 03:28:14Z piman $
 
-import gtk
 from plugins.events import EventPlugin
 from widgets import main
 
@@ -44,15 +43,16 @@ class AutoSearch(EventPlugin):
                           artists]))
             if title:
                 title_search = "&(%s)" % (
-                    ','.join(['title=%s' % t for t in titles]))
+                    ','.join(['title=%s' % t for t in titles if len(t) > 1]))
                 tag_search ="&(%s)" % (
-                    ','.join(['grouping=%s' % t for t in titles]))
+                    ','.join(['grouping=%s' % t for t in titles if len(t) > 2]))
             if filename:
                 filename_search = "&(%s)" % (
-                    ','.join(['~filename=%s' % f for f in filenames]))
+                    ','.join([
+                        '~filename=%s' % f for f in filenames if len(f) > 3]))
             if album:
                 album_search = "&(%s)" % (
-                    ','.join(["album=%s" % a for a in albums]))
+                    ','.join(["album=%s" % a for a in albums if len(a) > 2]))
             search = ("|(%s)" % ','.join([s for s in [
                 artist_search, title_search, filename_search, album_search,
                 tag_search] if s]))
@@ -80,7 +80,7 @@ def get_artists(song):
     for artist in song.list("artist") + performers:
         for bad_char in "/&|,'\"()!=\\<>":
             artist = artist.replace(bad_char, "#")
-        artists.extend([a.lower() for a in artist.split('#') if a])
+        artists.extend([a.lower().strip() for a in artist.split('#') if a])
     return set(artists)
 
 def split_filter(value):
