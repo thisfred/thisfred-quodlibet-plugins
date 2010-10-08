@@ -31,6 +31,8 @@ VERBOSE = True
 
 # GetGlue.com API URL
 API = "http://api.getglue.com/v2/"
+SOURCE = 'http://code.google.com/p/thisfred-quodlibet-plugins/source/browse/trunk/quodglue.py'
+
 
 def login(user_id, password):
     """Logs in with userId and password, returns token"""
@@ -41,6 +43,11 @@ def login(user_id, password):
 
 class QuodGlue(EventPlugin):
     """Main plugin class"""
+    PLUGIN_ID = "QuodGlue"
+    PLUGIN_NAME = _("GetGlue Checker Inner")
+    PLUGIN_DESC = "Make artist check ins for every song played."
+    PLUGIN_ICON = gtk.STOCK_CONNECT
+    PLUGIN_VERSION = "0.1"
 
     need_config = True
 
@@ -67,10 +74,9 @@ class QuodGlue(EventPlugin):
         url = self.getArtistUrl(name)
 
         app = "QuodGlue"
-        source = url
 
         gluerl = API + "user/addCheckin?objectId=%s&source=%s&app=%s&token=%s" % (
-            url, source, app, self.token)
+            url, SOURCE, app, self.token)
         urllib.urlopen(gluerl).read()
         return name
 
@@ -78,6 +84,7 @@ class QuodGlue(EventPlugin):
         """Read the options from the configuration file"""
         try:
             self.token = config.get("plugins", "quodglue_token")
+            return
         except:
             self.token = None
         if not self.token:
@@ -95,9 +102,10 @@ class QuodGlue(EventPlugin):
                         gtk.MESSAGE_INFO)
                     self.need_config = True
                     return
-            self.token = login(username, password)
-            config.set("plugins", "quodglue_token", self.token)
-        self.need_config = False
+            if username and password:
+                self.token = login(username, password)
+                config.set("plugins", "quodglue_token", self.token)
+                self.need_config = False
 
     def PluginPreferences(self, parent):
 
@@ -116,8 +124,7 @@ class QuodGlue(EventPlugin):
             except:
                 return
 
-            if self.username != newu or self.password != newp:
-                self.broken = False
+            self.broken = False
 
         table = gtk.Table(6, 3)
         table.set_col_spacings(3)
