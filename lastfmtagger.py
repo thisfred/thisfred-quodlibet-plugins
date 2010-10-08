@@ -126,11 +126,11 @@ class LastFMTagger(EventPlugin):
         from the audioscrobbler web service.
         """
         if artist:
-            artist = urllib.quote(artist, safe=None)
+            artist = urllib.quote(artist, safe='')
         if title:
-            title = urllib.quote(title, safe=None)
+            title = urllib.quote(title, safe='')
         if album:
-            album = urllib.quote(album, safe=None)
+            album = urllib.quote(album, safe='')
         log("get lastfm tags")
         tags = set()
         if artist and title:

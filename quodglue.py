@@ -67,11 +67,11 @@ class QuodGlue(EventPlugin):
         self.add_checkin(artist)
 
     def get_artist_url(self, artist):
-        return "http://www.last.fm/music/" + urllib.quote(artist, safe=None)
+        return "http://www.last.fm/music/" + urllib.quote(artist, safe='')
 
     def add_checkin(self, name):
         """Takes name and token, and likes appropriate page on GetGlue."""
-        url = self.getArtistUrl(name)
+        url = self.get_artist_url(name)
 
         app = "QuodGlue"
 
