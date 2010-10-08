@@ -43,19 +43,19 @@ class AutoSearch(EventPlugin):
                 if aa:
                     artist_search = "|(%s)" % aa
             if title:
-                tt = ','.join(['title=%s' % t for t in titles if len(t) > 1])
+                tt = ','.join(['title=%s' % t for t in titles if t])
                 if tt:
                     title_search = "&(%s)" % tt
-                tt = ','.join(['grouping=%s' % t for t in titles if len(t) > 2])
+                tt = ','.join(['grouping=%s' % t for t in titles if t])
                 if tt:
                     tag_search ="&(%s)" % tt
             if filename:
                 ff = ','.join(
-                    ['~filename=%s' % f for f in filenames if len(f) > 3])
+                    ['~filename=%s' % f for f in filenames if f])
                 if ff:
                     filename_search = "&(%s)" % ff
             if album:
-                aa = ','.join(["album=%s" % a for a in albums if len(a) > 2])
+                aa = ','.join(["album=%s" % a for a in albums if a])
                 if aa:
                     album_search = "&(%s)" % aa
             search = ("|(%s)" % ','.join([s for s in [
@@ -71,8 +71,7 @@ class AutoSearch(EventPlugin):
             main.browser.set_text(
                 "|(grouping=favorites, &(#(skipcount < 1), #(playcount < 1)), "
                 "#(added < 90 days))")
-        #main.browser.do_grab_focus()
-        main.browser.activate()
+
 
 def get_artists(song):
     """return lowercase UNICODE name of artists and performers."""
@@ -89,7 +88,7 @@ def get_artists(song):
     return set(artists)
 
 def split_filter(value):
-    return [v for v in value.split('#') if v.strip()]
+    return [v.strip() for v in value.split('#') if v.strip()]
 
 def remove_role(artist):
     if not artist.endswith(')'):

@@ -1,7 +1,7 @@
 """
 LastFMTagger: a Last.fm tagging plugin for Quod Libet.
 version 0.1 (infrastructure copied from QLScrobbler 0.8)
-(C) 2005-2007 by Eric Casteleijn <thisfred@gmail.com>
+(C) 2005-2010 by Eric Casteleijn <thisfred@gmail.com>
                  Joshua Kwan <joshk@triplehelix.org>,
                  Joe Wreschnig <piman@sacredchao.net>,
 Licensed under GPLv2. See Quod Libet's COPYING for more information.
@@ -125,6 +125,12 @@ class LastFMTagger(EventPlugin):
         """Get the user's tags for the current track, album and artist
         from the audioscrobbler web service.
         """
+        if artist:
+            artist = urllib.quote(artist, safe=None)
+        if title:
+            title = urllib.quote(title, safe=None)
+        if album:
+            album = urllib.quote(album, safe=None)
         log("get lastfm tags")
         tags = set()
         if artist and title:
@@ -220,8 +226,9 @@ class LastFMTagger(EventPlugin):
     def submit_album_tags(self, song, tags):
         log("submitting album tags: %s " % ', '.join(tags))
         random_string, md5hash = self.get_timestamp()
+        artist = song.get("albumartist") or song["artist"]
         self._submit_album_tags(
-            self.username, random_string, md5hash, song["artist"],
+            self.username, random_string, md5hash, artist,
             song["album"], list(tags), 'set')
 
     def _submit_album_tags(self, *args):
@@ -299,7 +306,9 @@ class LastFMTagger(EventPlugin):
         if ql_tag_comma:
             ql_tags = set([
                 tag.lower().strip() for tag in ql_tag_comma.split(",")])
-        lastfm_tags = self.get_lastfm_tags(title, artist, album)
+        album_artist = song.get("albumartist") or artist
+        album_artist = album_artist.encode("utf-8")
+        lastfm_tags = self.get_lastfm_tags(title, album_artist, album)
         if direction == 'down':
             all_tags = ql_tags | lastfm_tags
         else:
@@ -307,7 +316,7 @@ class LastFMTagger(EventPlugin):
         if direction == 'up':
             if all_tags != lastfm_tags:
                 self.submit_tags(
-                    song, artist, album, title, all_tags, lastfm_tags)
+                    song, album_artist, album, title, all_tags, lastfm_tags)
         if direction == 'down':
             if all_tags:
                 self.save_tags(song, all_tags)
