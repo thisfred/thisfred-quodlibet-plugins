@@ -24,14 +24,11 @@ class AutoSearch(EventPlugin):
             self.ignore_empty_queue or len(main.playlist.q) > 0):
             title = song.comma("title").lower()
             album = song.comma("album").lower()
-            for bad_char in "/&|,'\"()!=\\<>":
+            for bad_char in "/&|,'\"()!=\\<> *":
                 title = title.replace(bad_char, "#")
                 album = album.replace(bad_char, "#")
-            filename = title.replace(' ', '#')
+            filename = title
             artists = get_artists(song)
-            titles = split_filter(title)
-            filenames = split_filter(filename)
-            albums = split_filter(album)
             artist_search = ''
             title_search = ''
             filename_search = ''
@@ -39,29 +36,20 @@ class AutoSearch(EventPlugin):
             tag_search = ''
             if artists:
                 aa = ','.join(
-                    ["|(artist=%s,performer=%s)" % (a, a) for a in artists])
+                    ["|(artist=/%s/,performer=/%s/)" % (a, a) for a in artists])
                 if aa:
                     artist_search = "|(%s)" % aa
             if title:
-                tt = ','.join(['title=%s' % t for t in titles if t])
-                if tt:
-                    title_search = "&(%s)" % tt
-                tt = ','.join(['grouping=%s' % t for t in titles if t])
-                if tt:
-                    tag_search ="&(%s)" % tt
+                title_search = "title=/%s/" % title
+                tag_search ="grouping=/%s/" % title
             if filename:
-                ff = ','.join(
-                    ['~filename=%s' % f for f in filenames if f])
-                if ff:
-                    filename_search = "&(%s)" % ff
+                filename_search = "~filename=/%s/" % filename
             if album:
-                aa = ','.join(["album=%s" % a for a in albums if a])
-                if aa:
-                    album_search = "&(%s)" % aa
+                album_search = "album=/%s/" % album
             search = ("|(%s)" % ','.join([s for s in [
                 artist_search, title_search, filename_search, album_search,
                 tag_search] if s]))
-            main.browser.set_text(search)
+            main.browser.set_text(search.replace('#', '\W*'))
         else:
             if (main.browser.status ==
                 "|(grouping=favorites, &(#(skipcount < 1), #(playcount < 1)), "
@@ -80,15 +68,13 @@ def get_artists(song):
     for tag in song._song:
         if tag.startswith('performer:'):
             performers.extend(
-                [artist for artist in song.list(tag)])
+                [artist.lower() for artist in song.list(tag)])
     for artist in song.list("artist") + performers:
+        artist = artist.lower()
         for bad_char in "/&|,'\"()!=\\<>":
             artist = artist.replace(bad_char, "#")
-        artists.extend([a.lower().strip() for a in artist.split('#') if a])
+        artists.append(artist)
     return set(artists)
-
-def split_filter(value):
-    return [v.strip() for v in value.split('#') if v.strip()]
 
 def remove_role(artist):
     if not artist.endswith(')'):
