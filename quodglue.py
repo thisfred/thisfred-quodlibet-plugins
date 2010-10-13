@@ -31,7 +31,7 @@ VERBOSE = True
 
 # GetGlue.com API URL
 API = "http://api.getglue.com/v2/"
-SOURCE = 'http://code.google.com/p/thisfred-quodlibet-plugins/source/browse/trunk/quodglue.py'
+SOURCE = 'http://code.google.com/p/quodlibet/'
 
 
 def login(user_id, password):
@@ -67,13 +67,14 @@ class QuodGlue(EventPlugin):
         self.add_checkin(artist)
 
     def get_artist_url(self, artist):
+        artist = artist.encode('utf-8')
         return "http://www.last.fm/music/" + urllib.quote(artist, safe='')
 
     def add_checkin(self, name):
         """Takes name and token, and likes appropriate page on GetGlue."""
         url = self.get_artist_url(name)
 
-        app = "QuodGlue"
+        app = "Quod Libet"
 
         gluerl = API + "user/addCheckin?objectId=%s&source=%s&app=%s&token=%s" % (
             url, SOURCE, app, self.token)
