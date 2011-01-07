@@ -7,17 +7,19 @@ version 0.1 (infrastructure copied from QLScrobbler 0.8)
 Licensed under GPLv2. See Quod Libet's COPYING for more information.
 """
 
-import md5, urllib
 import config, widgets
-import gobject, gtk, xmlrpclib
-from time import time
-from xml.dom import minidom
+import gobject, gtk
+import pylast
+
 from qltk.msg import Message
 from quodlibet.util import copool
 from plugins.events import EventPlugin
 
 # Set this to True to enable logging
 VERBOSE = True
+API_KEY = "09d0975a99a4cab235b731d31abf0057"
+API_SECRET = "e3b038559cd1f7037caf268b71310551"
+
 
 def log(msg):
     """logging function"""
@@ -61,31 +63,28 @@ class LastFMTagger(EventPlugin):
 
     def __init__(self):
         # Read configuration
+        self.network = None
         self.read_config()
 
     def plugin_on_song_started(self, song):
         """Triggered when song starts"""
         if song is None:
             return
-        log("===> DOWN")
         copool.add(self.sync_down, song)
 
     def plugin_on_song_ended(self, song, skipped):
         """Triggered when song ends/is skipped"""
         if song is None:
             return
-        log("===> UP")
         copool.add(self.sync_up, song)
 
     def read_config(self):
-        """Read the options from the configuration file"""
+        """Read the options from the configuration file."""
         username = ""
         password = ""
-        session = ""
         try:
             username = config.get("plugins", "lastfmtagger_username")
             password = config.get("plugins", "lastfmtagger_password")
-            session = config.get("plugins", "lastfmtagger_session")
         except:
             if (self.need_config == False and
                 getattr(self, 'PMEnFlag', False)):
@@ -95,13 +94,10 @@ class LastFMTagger(EventPlugin):
                     gtk.MESSAGE_INFO)
                 self.need_config = True
                 return
-
-        self.username = username
-        self.session = session
-        hasher = md5.new()
-        hasher.update(password)
-        self.password = hasher.hexdigest()
-        self.tag = 'grouping'
+        password_hash = pylast.md5(password)
+        self.network = pylast.get_lastfm_network(
+            api_key=API_KEY, api_secret=API_SECRET, username=username,
+            password_hash=password_hash)
         self.need_config = False
 
     def __destroy_cb(self, dialog, response_id):
@@ -116,6 +112,7 @@ class LastFMTagger(EventPlugin):
         gobject.idle_add(self.quick_dialog_helper, dtype, dstr)
 
     def enabled(self):
+        log("enabled")
         self.__enabled = True
 
     def disabled(self):
@@ -125,80 +122,41 @@ class LastFMTagger(EventPlugin):
         """Get the user's tags for the current track, album and artist
         from the audioscrobbler web service.
         """
-        if artist:
-            artist = urllib.quote(artist, safe='')
-        if title:
-            title = urllib.quote(title, safe='')
-        if album:
-            album = urllib.quote(album, safe='')
-        log("get lastfm tags")
         tags = set()
         if artist and title:
-            url = self.TRACK_TAG_URL % (self.username, artist, title)
-            tags |= self.get_lastfm_tags_from_url(url)
+            try:
+                track = self.network.get_track(artist, title)
+                tags |= set([tag.name.lower() for tag in track.get_tags()])
+            except pylast.WSError:
+                pass
         if artist and album:
-            url = self.ALBUM_TAG_URL % (self.username, artist, album)
-            tags |= self.get_lastfm_tags_from_url(url, prefix='album')
+            try:
+                album = self.network.get_album(artist, album)
+                tags |= set([
+                    'album:%s' % tag.name.lower() for tag in album.get_tags()])
+            except pylast.WSError:
+                pass
         if artist:
-            url = self.ARTIST_TAG_URL % (self.username, artist)
-            tags |= self.get_lastfm_tags_from_url(url, prefix='artist')
-        return tags
-
-    def get_lastfm_tags_from_url(self, url, prefix=None):
-        """Get the tags from the audioscrobbler webservice, if they
-        aren't already in the cache.
-        """
-        log("get tags from url: %s " % url)
-        tags = set()
-        cached_tags = self.lastfm_cache.get(url, None)
-        if not cached_tags is None:
-            return cached_tags
-        try:
-            stream = urllib.urlopen(url)
-            xmldoc = minidom.parse(stream).documentElement
-        except:
-            self.lastfm_cache[url] = tags
-            return tags
-        tagnodes = xmldoc.getElementsByTagName("tag")
-        for tagnode in tagnodes:
-            if prefix is not None:
-                tag = "%s:%s" % (
-                    prefix,
-                    tagnode.getElementsByTagName(
-                    "name")[0].firstChild.nodeValue)
-                tags.add(tag.lower())
-            else:
-                tag = tagnode.getElementsByTagName(
-                    "name")[0].firstChild.nodeValue
-                tags.add(tag.lower())
-        self.lastfm_cache[url] = tags
+            try:
+                artist = self.network.get_artist(artist)
+                tags |= set([
+                    'artist:%s' % tag.name.lower() for tag in
+                    artist.get_tags()])
+            except pylast.WSError:
+                pass
+        if tags:
+            log('lastfm tags: %s' % ', '.join(tags))
         return tags
 
     def submit_track_tags(self, song, tags):
         """Submit the tags to last.fm if locally changes are detected.
         """
         log("submitting track tags: %s " % ', '.join(tags))
-        random_string, md5hash = self.get_timestamp()
         title = song.comma("title")
         if "version" in song:
             title += " (%s)" % song.comma("version").encode("utf-8")
-        self._submit_track_tags(
-            self.username,
-            random_string,
-            md5hash,
-            song["artist"],
-            title,
-            list(tags),
-            'set')
-
-    def _submit_track_tags(self, *args):
-        log("submitting track tags: %s " % repr(args))
-        try:
-            server = xmlrpclib.ServerProxy(
-                "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
-            server.tagTrack(*args)
-        except:
-            pass
+        track = self.network.get_track(song['artist'], title)
+        track.set_tags(list(tags))
 
     def get_tags_for(self, tags, for_=""):
         if for_:
@@ -209,43 +167,20 @@ class LastFMTagger(EventPlugin):
 
     def submit_artist_tags(self, song, tags):
         log("submitting artist tags: %s " % ', '.join(tags))
-        random_string, md5hash = self.get_timestamp()
-        self._submit_artist_tags(
-            self.username, random_string, md5hash, song["artist"], list(tags),
-            'set')
-
-    def _submit_artist_tags(self, *args):
-        log("submitting artist tags: %s " % repr(args))
-        try:
-            server = xmlrpclib.ServerProxy(
-                "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
-            server.tagArtist(*args)
-        except:
-            pass
+        artist = self.network.get_artist(song['artist'])
+        artist.set_tags(list(tags))
 
     def submit_album_tags(self, song, tags):
         log("submitting album tags: %s " % ', '.join(tags))
-        random_string, md5hash = self.get_timestamp()
         artist = song.get("albumartist") or song["artist"]
-        self._submit_album_tags(
-            self.username, random_string, md5hash, artist,
-            song["album"], list(tags), 'set')
-
-    def _submit_album_tags(self, *args):
-        log("submitting album tags: %s " % repr(args))
-        try:
-            server = xmlrpclib.ServerProxy(
-                "http://ws.audioscrobbler.com/1.0/rw/xmlrpc.php")
-            server.tagAlbum(*args)
-        except:
-            pass
+        album = self.network.get_album(artist, song['album'])
+        album.set_tags(list(tags))
 
     def save_tags(self, song, tags):
         log("saving tags: %s" % ', '.join(tags))
         gtk.gdk.threads_enter()
         try:
             song[self.tag] = '\n'.join(tags)
-            log("saved tags")
         finally:
             gtk.gdk.threads_leave()
 
@@ -292,17 +227,16 @@ class LastFMTagger(EventPlugin):
         and tags that are on the file but but not on last.fm are
         submitted.
         """
-        log("syncing tags")
-        title = urllib.quote_plus(song.comma("title").encode("utf-8"))
+        title = song.comma("title").encode("utf-8")
         if "version" in song:
-            title += urllib.quote_plus(
-                " (%s)" % song.comma("version").encode("utf-8"))
-        artist = urllib.quote_plus(song.comma("artist").encode("utf-8"))
-        album =  urllib.quote_plus(song.comma("album").encode("utf-8"))
+            title += " (%s)" % song.comma("version").encode("utf-8")
+        artist = song.comma("artist").encode("utf-8")
+        album = song.comma("album").encode("utf-8")
         ql_tags = set()
         ql_tag_comma = song.comma(self.tag)
 
-        log("local tags: %s" % ql_tag_comma)
+        if ql_tag_comma:
+            log("local tags: %s" % ql_tag_comma)
         if ql_tag_comma:
             ql_tags = set([
                 tag.lower().strip() for tag in ql_tag_comma.split(",")])
@@ -320,10 +254,6 @@ class LastFMTagger(EventPlugin):
         if direction == 'down':
             if all_tags:
                 self.save_tags(song, all_tags)
-
-    def get_timestamp(self):
-        timestamp = str(int(time()))
-        return timestamp, md5.md5(self.password + timestamp).hexdigest()
 
     def PluginPreferences(self, parent):
 

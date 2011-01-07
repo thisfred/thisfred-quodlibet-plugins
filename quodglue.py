@@ -20,10 +20,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
+"""GetGlue plugin."""
 
 from lxml import etree
 import urllib
-import gtk, config
+import config
+import gtk
 from plugins.events import EventPlugin
 
 # Set this to True to enable logging
@@ -41,6 +43,7 @@ def login(user_id, password):
     xlogin = etree.XML(response)
     return xlogin.getchildren()[1].getchildren()[0][2].text
 
+
 class QuodGlue(EventPlugin):
     """Main plugin class"""
     PLUGIN_ID = "QuodGlue"
@@ -53,6 +56,7 @@ class QuodGlue(EventPlugin):
 
     def __init__(self):
         # Read configuration
+        self.token = None
         self.read_config()
         self.last_artist = None
 
@@ -67,6 +71,7 @@ class QuodGlue(EventPlugin):
         self.add_checkin(artist)
 
     def get_artist_url(self, artist):
+        """Construct the artist url. """
         artist = artist.encode('utf-8')
         return "http://www.last.fm/music/" + urllib.quote(artist, safe='')
 
@@ -75,19 +80,23 @@ class QuodGlue(EventPlugin):
         url = self.get_artist_url(name)
 
         app = "Quod Libet"
-
-        gluerl = API + "user/addCheckin?objectId=%s&source=%s&app=%s&token=%s" % (
-            url, SOURCE, app, self.token)
-        urllib.urlopen(gluerl).read()
+        gluerl = (
+            API + "user/addCheckin?objectId=%s&source=%s&app=%s&token=%s" % (
+            url, SOURCE, app, self.token))
+        try:
+            urllib.urlopen(gluerl).read()
+        except IOError:
+            config.set("plugins", "quodglue_token", '')
+            self.need_config = True
+            self.read_config()
         return name
 
     def read_config(self):
         """Read the options from the configuration file"""
         try:
             self.token = config.get("plugins", "quodglue_token")
-            return
         except:
-            self.token = None
+            self.token = None           # pylint: disable=W0702
         if not self.token:
             username = ""
             password = ""
@@ -95,12 +104,8 @@ class QuodGlue(EventPlugin):
                 username = config.get("plugins", "quodglue_username")
                 password = config.get("plugins", "quodglue_password")
             except:
-                if (self.need_config == False and
+                if (self.need_config == False and  # pylint: disable=W0702
                     getattr(self, 'PMEnFlag', False)):
-                    self.quick_dialog(
-                        "Please visit the Preferences window to set QuodGlue"
-                        " up. Until then, checkins will not be made.",
-                        gtk.MESSAGE_INFO)
                     self.need_config = True
                     return
             if username and password:
@@ -108,24 +113,13 @@ class QuodGlue(EventPlugin):
                 config.set("plugins", "quodglue_token", self.token)
                 self.need_config = False
 
-    def PluginPreferences(self, parent):
+    def PluginPreferences(self, parent):  # pylint: disable=C0103
+        """Preferences."""
 
         def changed(entry, key):
+            """Handle changes."""
             # having a function for each entry is unnecessary..
             config.set("plugins", "quodglue_" + key, entry.get_text())
-
-        def destroyed(*args):
-            # if changed, let's say that things just got better and we should
-            # try everything again
-            newu = None
-            newp = None
-            try:
-                newu = config.get("plugins", "quodglue_username")
-                newp = config.get("plugins", "quodglue_password")
-            except:
-                return
-
-            self.broken = False
 
         table = gtk.Table(6, 3)
         table.set_col_spacings(3)
@@ -134,9 +128,9 @@ class QuodGlue(EventPlugin):
         lu = gtk.Label(_("UserId:"))
         lp = gtk.Label(_("Password:"))
 
-        for l in [lt, lu, lp]:
-            l.set_line_wrap(True)
-            l.set_alignment(0.0, 0.5)
+        for label in [lt, lu, lp]:
+            label.set_line_wrap(True)
+            label.set_alignment(0.0, 0.5)
         table.attach(lt, 0, 2, 0, 1, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(lu, 0, 1, 1, 2, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(lp, 0, 1, 2, 3, xoptions=gtk.FILL | gtk.SHRINK)
@@ -150,17 +144,15 @@ class QuodGlue(EventPlugin):
         try:
             userent.set_text(config.get("plugins", "quodglue_username"))
         except:
-            pass
+            pass                        # pylint: disable=W0702
         try:
             pwent.set_text(config.get("plugins", "quodglue_password"))
         except:
-            pass
+            pass                        # pylint: disable=W0702
 
         table.attach(userent, 1, 2, 1, 2, xoptions=gtk.FILL | gtk.SHRINK)
         table.attach(pwent, 1, 2, 2, 3, xoptions=gtk.FILL | gtk.SHRINK)
         pwent.connect('changed', changed, 'password')
         userent.connect('changed', changed, 'username')
 
-        table.connect('destroy', destroyed)
         return table
-
