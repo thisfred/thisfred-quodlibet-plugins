@@ -167,7 +167,7 @@ class LastFMTagger(EventPlugin):
             track = self.network.get_track(song['artist'], title)
             try:
                 track.set_tags([
-                    tag for tag in list(tags) if not tag.startswith('local:')])
+                    tag for tag in list(tags) if not tag.startswith('l:')])
             except (httplib.BadStatusLine, socket.error):
                 pass
 
@@ -184,7 +184,7 @@ class LastFMTagger(EventPlugin):
             artist = self.network.get_artist(song['artist'])
             try:
                 artist.set_tags([
-                    tag for tag in list(tags) if not tag.startswith('local:')])
+                    tag for tag in list(tags) if not tag.startswith('l:')])
             except httplib.BadStatusLine:
                 pass
 
@@ -195,7 +195,7 @@ class LastFMTagger(EventPlugin):
             album = self.network.get_album(artist, song['album'])
             try:
                 album.set_tags([
-                    tag for tag in list(tags) if not tag.startswith('local:')])
+                    tag for tag in list(tags) if not tag.startswith('l:')])
             except httplib.BadStatusLine:
                 pass
 
