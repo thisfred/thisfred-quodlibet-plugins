@@ -7,8 +7,14 @@ version 0.1 (infrastructure copied from QLScrobbler 0.8)
 Licensed under GPLv2. See Quod Libet's COPYING for more information.
 """
 
-import config, widgets
-import gobject, gtk
+import httplib
+import socket
+
+import config
+import widgets
+import gobject
+import gtk
+
 import pylast
 
 from qltk.msg import Message
@@ -95,9 +101,11 @@ class LastFMTagger(EventPlugin):
                 self.need_config = True
                 return
         password_hash = pylast.md5(password)
-        self.network = pylast.get_lastfm_network(
-            api_key=API_KEY, api_secret=API_SECRET, username=username,
-            password_hash=password_hash)
+        try:
+            self.network = pylast.LastFMNetwork(
+                API_KEY, API_SECRET, "", username, password_hash)
+        except (httplib.BadStatusLine, socket.error):
+            pass
         self.need_config = False
 
     def __destroy_cb(self, dialog, response_id):
@@ -123,26 +131,26 @@ class LastFMTagger(EventPlugin):
         from the audioscrobbler web service.
         """
         tags = set()
-        if artist and title:
+        if artist and title and self.network:
             try:
                 track = self.network.get_track(artist, title)
                 tags |= set([tag.name.lower() for tag in track.get_tags()])
-            except pylast.WSError:
+            except (httplib.BadStatusLine, pylast.WSError, socket.error):
                 pass
-        if artist and album:
+        if artist and album and self.network:
             try:
                 album = self.network.get_album(artist, album)
                 tags |= set([
                     'album:%s' % tag.name.lower() for tag in album.get_tags()])
-            except pylast.WSError:
+            except (httplib.BadStatusLine, pylast.WSError, socket.error):
                 pass
-        if artist:
+        if artist and self.network:
             try:
                 artist = self.network.get_artist(artist)
                 tags |= set([
                     'artist:%s' % tag.name.lower() for tag in
                     artist.get_tags()])
-            except pylast.WSError:
+            except (httplib.BadStatusLine, pylast.WSError, socket.error):
                 pass
         if tags:
             log('lastfm tags: %s' % ', '.join(tags))
@@ -155,8 +163,13 @@ class LastFMTagger(EventPlugin):
         title = song.comma("title")
         if "version" in song:
             title += " (%s)" % song.comma("version").encode("utf-8")
-        track = self.network.get_track(song['artist'], title)
-        track.set_tags(list(tags))
+        if self.network:
+            track = self.network.get_track(song['artist'], title)
+            try:
+                track.set_tags([
+                    tag for tag in list(tags) if not tag.startswith('local:')])
+            except (httplib.BadStatusLine, socket.error):
+                pass
 
     def get_tags_for(self, tags, for_=""):
         if for_:
@@ -167,14 +180,24 @@ class LastFMTagger(EventPlugin):
 
     def submit_artist_tags(self, song, tags):
         log("submitting artist tags: %s " % ', '.join(tags))
-        artist = self.network.get_artist(song['artist'])
-        artist.set_tags(list(tags))
+        if self.network:
+            artist = self.network.get_artist(song['artist'])
+            try:
+                artist.set_tags([
+                    tag for tag in list(tags) if not tag.startswith('local:')])
+            except httplib.BadStatusLine:
+                pass
 
     def submit_album_tags(self, song, tags):
         log("submitting album tags: %s " % ', '.join(tags))
         artist = song.get("albumartist") or song["artist"]
-        album = self.network.get_album(artist, song['album'])
-        album.set_tags(list(tags))
+        if self.network:
+            album = self.network.get_album(artist, song['album'])
+            try:
+                album.set_tags([
+                    tag for tag in list(tags) if not tag.startswith('local:')])
+            except httplib.BadStatusLine:
+                pass
 
     def save_tags(self, song, tags):
         log("saving tags: %s" % ', '.join(tags))
