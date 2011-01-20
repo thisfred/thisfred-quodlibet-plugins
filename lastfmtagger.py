@@ -159,6 +159,7 @@ class LastFMTagger(EventPlugin):
     def submit_track_tags(self, song, tags):
         """Submit the tags to last.fm if locally changes are detected.
         """
+        tags = [tag for tag in list(tags) if not tag.startswith('l:')]
         log("submitting track tags: %s " % ', '.join(tags))
         title = song.comma("title")
         if "version" in song:
@@ -166,8 +167,7 @@ class LastFMTagger(EventPlugin):
         if self.network:
             track = self.network.get_track(song['artist'], title)
             try:
-                track.set_tags([
-                    tag for tag in list(tags) if not tag.startswith('l:')])
+                track.set_tags(tags)
             except (httplib.BadStatusLine, socket.error):
                 pass
 
@@ -179,23 +179,23 @@ class LastFMTagger(EventPlugin):
             tag.startswith('album:') or tag.startswith('artist:')))
 
     def submit_artist_tags(self, song, tags):
+        tags = [tag for tag in list(tags) if not tag.startswith('l:')]
         log("submitting artist tags: %s " % ', '.join(tags))
         if self.network:
             artist = self.network.get_artist(song['artist'])
             try:
-                artist.set_tags([
-                    tag for tag in list(tags) if not tag.startswith('l:')])
+                artist.set_tags(tags)
             except httplib.BadStatusLine:
                 pass
 
     def submit_album_tags(self, song, tags):
+        tags = [tag for tag in list(tags) if not tag.startswith('l:')]
         log("submitting album tags: %s " % ', '.join(tags))
         artist = song.get("albumartist") or song["artist"]
         if self.network:
             album = self.network.get_album(artist, song['album'])
             try:
-                album.set_tags([
-                    tag for tag in list(tags) if not tag.startswith('l:')])
+                album.set_tags(tags)
             except httplib.BadStatusLine:
                 pass
 
