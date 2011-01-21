@@ -126,7 +126,7 @@ class LastFMTagger(EventPlugin):
     def disabled(self):
         self.__enabled = False
 
-    def get_lastfm_tags(self, title, artist, album):
+    def get_lastfm_tags(self, title, artist, album_artist, album):
         """Get the user's tags for the current track, album and artist
         from the audioscrobbler web service.
         """
@@ -137,9 +137,9 @@ class LastFMTagger(EventPlugin):
                 tags |= set([tag.name.lower() for tag in track.get_tags()])
             except (httplib.BadStatusLine, pylast.WSError, socket.error):
                 pass
-        if artist and album and self.network:
+        if album_artist and album and self.network:
             try:
-                album = self.network.get_album(artist, album)
+                album = self.network.get_album(album_artist, album)
                 tags |= set([
                     'album:%s' % tag.name.lower() for tag in album.get_tags()])
             except (httplib.BadStatusLine, pylast.WSError, socket.error):
@@ -265,7 +265,7 @@ class LastFMTagger(EventPlugin):
                 tag.lower().strip() for tag in ql_tag_comma.split(",")])
         album_artist = song.get("albumartist") or artist
         album_artist = album_artist.encode("utf-8")
-        lastfm_tags = self.get_lastfm_tags(title, album_artist, album)
+        lastfm_tags = self.get_lastfm_tags(title, artist, album_artist, album)
         if direction == 'down':
             all_tags = ql_tags | lastfm_tags
         else:
