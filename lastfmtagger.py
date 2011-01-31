@@ -168,7 +168,7 @@ class LastFMTagger(EventPlugin):
             track = self.network.get_track(song['artist'], title)
             try:
                 track.set_tags(tags)
-            except (httplib.BadStatusLine, socket.error):
+            except (httplib.BadStatusLine, socket.error, pylast.WSError):
                 pass
 
     def get_tags_for(self, tags, for_=""):
@@ -185,7 +185,7 @@ class LastFMTagger(EventPlugin):
             artist = self.network.get_artist(song['artist'])
             try:
                 artist.set_tags(tags)
-            except httplib.BadStatusLine:
+            except (httplib.BadStatusLine, socket.error):
                 pass
 
     def submit_album_tags(self, song, tags):
@@ -196,7 +196,7 @@ class LastFMTagger(EventPlugin):
             album = self.network.get_album(artist, song['album'])
             try:
                 album.set_tags(tags)
-            except httplib.BadStatusLine:
+            except (httplib.BadStatusLine, socket.error):
                 pass
 
     def save_tags(self, song, tags):
