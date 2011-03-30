@@ -185,7 +185,7 @@ class LastFMTagger(EventPlugin):
             artist = self.network.get_artist(song['artist'])
             try:
                 artist.set_tags(tags)
-            except (httplib.BadStatusLine, socket.error):
+            except (httplib.BadStatusLine, socket.error, pylast.WSError):
                 pass
 
     def submit_album_tags(self, song, tags):
@@ -196,7 +196,7 @@ class LastFMTagger(EventPlugin):
             album = self.network.get_album(artist, song['album'])
             try:
                 album.set_tags(tags)
-            except (httplib.BadStatusLine, socket.error):
+            except (httplib.BadStatusLine, socket.error, pylast.WSError):
                 pass
 
     def save_tags(self, song, tags):
@@ -208,10 +208,10 @@ class LastFMTagger(EventPlugin):
             gtk.gdk.threads_leave()
 
     def submit_tags(self, song, artist, album, title, all_tags, lastfm_tags):
-        log("submitting tags: %s" % ', '.join(all_tags))
         track_tags = self.get_tags_for(all_tags)
         lastfm_track_tags = self.get_tags_for(lastfm_tags)
-        if track_tags != lastfm_track_tags:
+        if set([t for t in track_tags if
+                not t.startswith('l:')]) != lastfm_track_tags:
             self.submit_track_tags(song, track_tags)
         self.lastfm_cache[
             self.TRACK_TAG_URL % (self.username, artist, title)] = track_tags

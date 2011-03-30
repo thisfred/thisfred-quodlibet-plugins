@@ -29,7 +29,7 @@ class AutoSearch(EventPlugin):          # pylint: disable=W0232
             self.ignore_empty_queue or len(main.playlist.q) > 0):
             title = song.comma("title").lower()
             album = song.comma("album").lower()
-            for bad_char in "/&|,'\"()[]!=\\<> *+.":
+            for bad_char in "?/&|,'\"()[]!=\\<> *+.":
                 title = title.replace(bad_char, "#")
                 album = album.replace(bad_char, "#")
             filename = title
@@ -49,7 +49,7 @@ class AutoSearch(EventPlugin):          # pylint: disable=W0232
                 title_search = "title=/%s/" % title
                 tag_search = "grouping=/%s/" % title
             if filename:
-                filename_search = "~filename=/%s/" % filename
+                filename_search = "~basename=/%s/" % filename
             if album:
                 album_search = "album=/%s/" % album
             search = ("|(%s)" % ','.join([s for s in [
@@ -60,13 +60,11 @@ class AutoSearch(EventPlugin):          # pylint: disable=W0232
             main.browser.set_text(search)
         else:
             if (main.browser.status ==
-                "|(grouping=favorites, &(#(skipcount < 1), #(playcount < 1)), "
-                "#(added < 90 days))"):
+                "|(#(playcount < 1), #(added < 90 days))"):
                 print "[autosearch:] *new* already set"
                 return
             main.browser.set_text(
-                "|(grouping=favorites, &(#(skipcount < 1), #(playcount < 1)), "
-                "#(added < 90 days))")
+                "|(#(playcount < 1), #(added < 90 days))")
 
 
 def get_artists(song):
